@@ -30,13 +30,15 @@ export function validateEnvironment(
 
   const ttl = getJwtTtl(config);
   if (!Number.isSafeInteger(ttl) || ttl < 60) {
-    throw new Error('JWT_TTL debe ser un entero de al menos 60 segundos.');
+    throw new Error(
+      'JWT_TTL debe ser una duración válida de al menos 60 segundos (p. ej. 1800, 30m o 1h).',
+    );
   }
 
   const maxAge = getSessionMaxAge(config);
   if (!Number.isSafeInteger(maxAge) || maxAge < ttl) {
     throw new Error(
-      'SESSION_MAX_AGE debe ser un entero de segundos igual o mayor que JWT_TTL.',
+      'SESSION_MAX_AGE debe ser una duración válida (p. ej. 28800 u 8h) igual o mayor que JWT_TTL.',
     );
   }
 

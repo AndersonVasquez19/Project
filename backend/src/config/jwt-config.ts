@@ -36,12 +36,38 @@ export const DEFAULT_JWT_TTL = 1800;
 /** Duración máxima de una sesión aunque haya actividad continua. */
 export const DEFAULT_SESSION_MAX_AGE = 28_800;
 
+const UNIT_SECONDS: Record<string, number> = {
+  s: 1,
+  m: 60,
+  h: 3600,
+  d: 86_400,
+};
+
+/**
+ * Duración en segundos: acepta un entero ("1800") o un número con unidad
+ * ("30m", "1h", "8h", "1d"). Devuelve NaN si el formato no es válido.
+ */
+export function parseDurationSeconds(
+  value: string | number | undefined,
+  fallback: number,
+): number {
+  if (value === undefined || value === '') return fallback;
+  if (typeof value === 'number') return value;
+
+  const match = /^(\d+)\s*([smhd])?$/i.exec(value.trim());
+  if (!match) return Number.NaN;
+
+  const unit = match[2]?.toLowerCase() ?? 's';
+  return Number(match[1]) * UNIT_SECONDS[unit];
+}
+
 export function getJwtTtl(config: ConfigService): number {
-  return Number(config.get<string>('JWT_TTL') ?? DEFAULT_JWT_TTL);
+  return parseDurationSeconds(config.get<string>('JWT_TTL'), DEFAULT_JWT_TTL);
 }
 
 export function getSessionMaxAge(config: ConfigService): number {
-  return Number(
-    config.get<string>('SESSION_MAX_AGE') ?? DEFAULT_SESSION_MAX_AGE,
+  return parseDurationSeconds(
+    config.get<string>('SESSION_MAX_AGE'),
+    DEFAULT_SESSION_MAX_AGE,
   );
 }

@@ -26,6 +26,21 @@ describe('validateEnvironment', () => {
     ).not.toThrow();
   });
 
+  it('accepts durations with a unit and rejects unknown formats', () => {
+    expect(() =>
+      validateEnvironment({ ...base, JWT_TTL: '1h', SESSION_MAX_AGE: '24h' }),
+    ).not.toThrow();
+    expect(() =>
+      validateEnvironment({ ...base, JWT_TTL: '30m', SESSION_MAX_AGE: '8h' }),
+    ).not.toThrow();
+    expect(() => validateEnvironment({ ...base, JWT_TTL: '1 hora' })).toThrow(
+      'JWT_TTL',
+    );
+    expect(() => validateEnvironment({ ...base, JWT_TTL: '30s' })).toThrow(
+      'JWT_TTL',
+    );
+  });
+
   it('requires JWT_SECRET and ignores the legacy APP_KEY', () => {
     expect(() =>
       validateEnvironment({
