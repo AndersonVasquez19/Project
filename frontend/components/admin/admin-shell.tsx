@@ -2,9 +2,10 @@
 
 import axios from "axios";
 import { useRouter } from "next/navigation";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AdminSidebar } from "@/components/admin/sidebar";
 import { AdminTopbar } from "@/components/admin/topbar";
+import { Toaster } from "@/components/admin/toaster";
 import type { AdminIdentity } from "@/lib/auth";
 import { apiClient } from "@/services/apiClient";
 
@@ -29,6 +30,21 @@ export function AdminShell({ user, children }: AdminShellProps) {
     window.addEventListener("keydown", closeSidebar);
     return () => window.removeEventListener("keydown", closeSidebar);
   }, []);
+
+  // Foco: al abrir el menú móvil entra al primer enlace; al cerrarlo vuelve al botón.
+  const wasOpen = useRef(false);
+  useEffect(() => {
+    if (sidebarOpen) {
+      document
+        .querySelector<HTMLElement>("#admin-sidebar a")
+        ?.focus({ preventScroll: true });
+    } else if (wasOpen.current) {
+      document
+        .querySelector<HTMLElement>("[aria-controls='admin-sidebar']")
+        ?.focus({ preventScroll: true });
+    }
+    wasOpen.current = sidebarOpen;
+  }, [sidebarOpen]);
 
   async function logout() {
     if (loggingOut) {
@@ -57,6 +73,13 @@ export function AdminShell({ user, children }: AdminShellProps) {
 
   return (
     <div className="admin-surface min-h-screen overflow-x-hidden font-sans text-[#172B3A] antialiased">
+      <a
+        href="#admin-main-content"
+        className="sr-only z-50 rounded-lg bg-horus-navy px-4 py-2 text-sm font-semibold text-white focus:not-sr-only focus:fixed focus:left-4 focus:top-4"
+      >
+        Saltar al contenido
+      </a>
+      <Toaster />
       {sidebarOpen && (
         <button
           type="button"
@@ -84,6 +107,7 @@ export function AdminShell({ user, children }: AdminShellProps) {
         />
         <main
           id="admin-main-content"
+          tabIndex={-1}
           className="mx-auto w-full min-w-0 max-w-[1600px] flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-8"
         >
           {logoutError && (

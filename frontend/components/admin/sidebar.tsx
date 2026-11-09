@@ -29,7 +29,8 @@ export function AdminSidebar({
       id="admin-sidebar"
       className={cn(
         "fixed inset-y-0 left-0 z-40 flex w-[260px] -translate-x-full flex-col border-r border-white/10 bg-[#0A2540] text-slate-300 shadow-xl shadow-[#0A2540]/20 transition-transform duration-200 md:w-[72px] md:translate-x-0 xl:w-[260px]",
-        open ? "translate-x-0" : "-translate-x-full md:translate-x-0",
+        // Cerrado en móvil: invisible para que sus enlaces no reciban foco ni lectores de pantalla.
+        open ? "translate-x-0" : "-translate-x-full max-md:invisible md:translate-x-0",
       )}
       aria-label="Navegación administrativa"
     >
@@ -44,7 +45,7 @@ export function AdminSidebar({
         >
           <ShieldCheck size={22} />
         </span>
-        <span className="min-w-0 md:hidden xl:block">
+        <span className="min-w-0 md:sr-only xl:not-sr-only">
           <span className="block truncate text-sm font-bold tracking-tight text-white">
             Horus Group
           </span>
@@ -102,7 +103,7 @@ export function AdminSidebar({
                       )}
                       aria-hidden="true"
                     />
-                    <span className="truncate md:hidden xl:inline">{item.label}</span>
+                    <span className="truncate md:sr-only xl:not-sr-only">{item.label}</span>
                   </Link>
                 );
               })}
@@ -122,7 +123,7 @@ export function AdminSidebar({
             className="fa-solid fa-right-from-bracket w-5 shrink-0 text-center text-slate-400 transition-colors group-hover:text-[#19A7A1]"
             aria-hidden="true"
           />
-          <span className="truncate md:hidden xl:inline">
+          <span className="truncate md:sr-only xl:not-sr-only">
             {loggingOut ? "Cerrando sesión..." : "Cerrar sesión"}
           </span>
         </button>

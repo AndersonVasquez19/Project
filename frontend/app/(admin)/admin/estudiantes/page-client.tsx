@@ -105,10 +105,10 @@ export function EstudiantesPageClient({ permissions }: Props) {
 
       <div className="rounded-2xl border border-[#E2E8F0] bg-white p-4 shadow-[0_2px_10px_rgba(10,37,64,0.04)]">
         <div className="mb-4 flex flex-wrap items-center gap-2">
-          <Button type="button" variant={eliminados ? "outline" : "default"} onClick={() => { setEliminados(false); resetPage(); }}>
+          <Button type="button" aria-pressed={!eliminados} variant={eliminados ? "outline" : "default"} onClick={() => { setEliminados(false); resetPage(); }}>
             Activos y vigentes
           </Button>
-          <Button type="button" variant={eliminados ? "default" : "outline"} onClick={() => { setEliminados(true); resetPage(); }}>
+          <Button type="button" aria-pressed={eliminados} variant={eliminados ? "default" : "outline"} onClick={() => { setEliminados(true); resetPage(); }}>
             Eliminados
           </Button>
         </div>

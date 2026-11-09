@@ -3,6 +3,20 @@
 @import "shadcn/tailwind.css";
 @import "@fortawesome/fontawesome-free/css/all.min.css";
 
+/* Paleta Horus: fuente única de color del panel (usar bg-horus-*, text-horus-*, border-horus-*). */
+@theme {
+  --color-horus-ink: #172b3a;
+  --color-horus-muted: #64748b;
+  --color-horus-line: #e2e8f0;
+  --color-horus-surface: #f4f7fb;
+  --color-horus-subtle: #f8fafc;
+  --color-horus-primary: #176b9a;
+  --color-horus-primary-soft: #287fb5;
+  --color-horus-navy: #0a2540;
+  --color-horus-accent: #19a7a1;
+  --color-horus-danger: #b91c1c;
+}
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {

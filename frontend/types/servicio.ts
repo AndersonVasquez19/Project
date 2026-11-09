@@ -24,6 +24,8 @@ export interface ServiciosQuery {
   page: number;
   limit: number;
   search?: string;
+  sort?: string;
+  order?: "asc" | "desc";
 }
 
 export interface ServicioInput {
