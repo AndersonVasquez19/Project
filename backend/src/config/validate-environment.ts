@@ -1,4 +1,4 @@
-import { getJwtSecret } from './jwt-config';
+import { getJwtSecret, getJwtTtl, getSessionMaxAge } from './jwt-config';
 import { ConfigService } from '@nestjs/config';
 import { getDatabaseUrl } from './database-config';
 
@@ -28,9 +28,16 @@ export function validateEnvironment(
   getDatabaseUrl(config);
   getJwtSecret(config);
 
-  const ttl = Number(environment.JWT_TTL ?? 900);
+  const ttl = getJwtTtl(config);
   if (!Number.isSafeInteger(ttl) || ttl < 60) {
     throw new Error('JWT_TTL debe ser un entero de al menos 60 segundos.');
+  }
+
+  const maxAge = getSessionMaxAge(config);
+  if (!Number.isSafeInteger(maxAge) || maxAge < ttl) {
+    throw new Error(
+      'SESSION_MAX_AGE debe ser un entero de segundos igual o mayor que JWT_TTL.',
+    );
   }
 
   if (environment.NODE_ENV === 'production') {

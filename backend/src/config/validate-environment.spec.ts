@@ -10,6 +10,22 @@ describe('validateEnvironment', () => {
     expect(() => validateEnvironment(base)).not.toThrow();
   });
 
+  it('validates the sliding-session timings', () => {
+    expect(() => validateEnvironment({ ...base, JWT_TTL: '30' })).toThrow(
+      'JWT_TTL',
+    );
+    expect(() =>
+      validateEnvironment({ ...base, JWT_TTL: '1800', SESSION_MAX_AGE: '900' }),
+    ).toThrow('SESSION_MAX_AGE');
+    expect(() =>
+      validateEnvironment({
+        ...base,
+        JWT_TTL: '1800',
+        SESSION_MAX_AGE: '28800',
+      }),
+    ).not.toThrow();
+  });
+
   it('requires JWT_SECRET and ignores the legacy APP_KEY', () => {
     expect(() =>
       validateEnvironment({

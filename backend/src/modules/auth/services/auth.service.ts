@@ -8,7 +8,11 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { randomBytes } from 'node:crypto';
 import * as bcrypt from 'bcryptjs';
-import { getJwtIssuer, getJwtTtl } from '../../../config/jwt-config';
+import {
+  getJwtIssuer,
+  getJwtTtl,
+  getSessionMaxAge,
+} from '../../../config/jwt-config';
 import { PrismaService } from '../../../prisma/prisma.service';
 import type { LoginDto } from '../dtos/login.dto';
 import type { RegisterDto } from '../dtos/register.dto';
@@ -28,6 +32,8 @@ export type JwtClaims = {
   roles: string[];
   permissions: string[];
   ver: number;
+  /** Inicio de la sesión (segundos epoch); se conserva al renovar el token. */
+  auth_time?: number;
   iat?: number;
   nbf?: number;
   exp?: number;
@@ -72,6 +78,12 @@ export class AuthService {
       });
     }
 
+    const { roleNames, permissionNames } = await this.loadAccess(user.id);
+    return this.issueTokenResponse(user, roleNames, permissionNames);
+  }
+
+  /** Roles y permisos vigentes del usuario (se relee al iniciar sesión y al renovar). */
+  private async loadAccess(userId: bigint) {
     const roles = await this.prisma.$queryRaw<NameRecord[]>`
       SELECT DISTINCT r.name
       FROM roles r
@@ -79,7 +91,7 @@ export class AuthService {
         ON mhr.role_id = r.id
       WHERE r.guard_name = 'web'
         AND mhr.model_type = ${USER_MODEL_TYPE}
-        AND mhr.model_id = ${user.id}
+        AND mhr.model_id = ${userId}
       ORDER BY r.name
     `;
     const permissions = await this.prisma.$queryRaw<NameRecord[]>`
@@ -93,20 +105,46 @@ export class AuthService {
       LEFT JOIN model_has_roles mhr
         ON mhr.role_id = r.id
        AND mhr.model_type = ${USER_MODEL_TYPE}
-       AND mhr.model_id = ${user.id}
+       AND mhr.model_id = ${userId}
       LEFT JOIN model_has_permissions mhp
         ON mhp.permission_id = p.id
        AND mhp.model_type = ${USER_MODEL_TYPE}
-       AND mhp.model_id = ${user.id}
+       AND mhp.model_id = ${userId}
       WHERE p.guard_name = 'web'
         AND (mhr.model_id IS NOT NULL OR mhp.model_id IS NOT NULL)
       ORDER BY p.name
     `;
-    return this.issueTokenResponse(
-      user,
-      roles.map(({ name }) => name),
-      permissions.map(({ name }) => name),
-    );
+    return {
+      roleNames: roles.map(({ name }) => name),
+      permissionNames: permissions.map(({ name }) => name),
+    };
+  }
+
+  /**
+   * Renueva el token de una sesión activa (ventana deslizante). Relee roles y
+   * permisos, conserva el inicio de sesión y no supera SESSION_MAX_AGE.
+   */
+  async refresh(claims: JwtClaims) {
+    const now = Math.floor(Date.now() / 1000);
+    const authTime = claims.auth_time ?? claims.iat ?? now;
+    if (now >= authTime + getSessionMaxAge(this.config)) {
+      throw new UnauthorizedException({
+        message:
+          'La sesión superó su duración máxima. Inicia sesión nuevamente.',
+        code: 'SESSION_EXPIRED',
+      });
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: BigInt(claims.sub) },
+      select: { id: true, name: true, email: true, jwtVersion: true },
+    });
+    if (!user || user.jwtVersion !== claims.ver) {
+      throw new UnauthorizedException('El token no es válido o fue revocado.');
+    }
+
+    const { roleNames, permissionNames } = await this.loadAccess(user.id);
+    return this.issueTokenResponse(user, roleNames, permissionNames, authTime);
   }
 
   async register(data: RegisterDto) {
@@ -165,6 +203,7 @@ export class AuthService {
     },
     roleNames: string[],
     permissions: string[],
+    authTime = Math.floor(Date.now() / 1000),
   ) {
     const id = Number(user.id);
     if (!Number.isSafeInteger(id) || id < 1) {
@@ -172,7 +211,20 @@ export class AuthService {
     }
 
     const issuer = getJwtIssuer(this.config);
-    const expiresIn = getJwtTtl(this.config);
+    // El token no puede vivir más que el tope absoluto de la sesión.
+    const now = Math.floor(Date.now() / 1000);
+    const expiresIn = Math.min(
+      getJwtTtl(this.config),
+      authTime + getSessionMaxAge(this.config) - now,
+    );
+    if (expiresIn < 1) {
+      throw new UnauthorizedException({
+        message:
+          'La sesión superó su duración máxima. Inicia sesión nuevamente.',
+        code: 'SESSION_EXPIRED',
+      });
+    }
+
     const accessToken = await this.jwt.signAsync(
       {
         name: user.name,
@@ -181,6 +233,7 @@ export class AuthService {
         roles: roleNames,
         permissions,
         ver: user.jwtVersion,
+        auth_time: authTime,
       },
       {
         algorithm: 'HS256',

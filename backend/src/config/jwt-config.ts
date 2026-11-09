@@ -31,6 +31,17 @@ export function getJwtIssuer(config: ConfigService): string {
   );
 }
 
+/** Vida de cada token = tiempo de inactividad tolerado (se renueva con la actividad). */
+export const DEFAULT_JWT_TTL = 1800;
+/** Duración máxima de una sesión aunque haya actividad continua. */
+export const DEFAULT_SESSION_MAX_AGE = 28_800;
+
 export function getJwtTtl(config: ConfigService): number {
-  return Number(config.get<string>('JWT_TTL') ?? 900);
+  return Number(config.get<string>('JWT_TTL') ?? DEFAULT_JWT_TTL);
+}
+
+export function getSessionMaxAge(config: ConfigService): number {
+  return Number(
+    config.get<string>('SESSION_MAX_AGE') ?? DEFAULT_SESSION_MAX_AGE,
+  );
 }

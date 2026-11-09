@@ -36,6 +36,17 @@ export class AuthController {
     return this.authService.register(data);
   }
 
+  /** Renueva el token mientras la sesión esté activa (ver AuthService.refresh). */
+  @Post('refresh')
+  @UseGuards(JwtAuthGuard, ThrottlerGuard)
+  @Throttle({
+    ip: { limit: 120, ttl: 60_000 },
+    credential: { limit: 30, ttl: 60_000 },
+  })
+  refresh(@Req() request: AuthenticatedRequest) {
+    return this.authService.refresh(request.auth);
+  }
+
   @Get('me')
   @UseGuards(JwtAuthGuard)
   me(@Req() request: AuthenticatedRequest) {
