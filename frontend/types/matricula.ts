@@ -45,6 +45,8 @@ export interface MatriculasQuery {
   page: number;
   limit: number;
   search?: string;
+  sort?: string;
+  order?: "asc" | "desc";
   estado?: EstadoMatricula;
   curso_id?: string;
   eliminados?: boolean;

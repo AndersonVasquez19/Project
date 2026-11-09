@@ -6,6 +6,8 @@ type Props = {
   open: boolean;
   pending: boolean;
   action: "annul" | "archive";
+  /** Nombre del estudiante, para dejar claro sobre qué matrícula se actúa. */
+  subject?: string;
   onOpenChange: (open: boolean) => void;
   onConfirm: () => void;
 };
@@ -14,10 +16,12 @@ export function MatriculaActionConfirm({
   open,
   pending,
   action,
+  subject,
   onOpenChange,
   onConfirm,
 }: Props) {
   const isAnnul = action === "annul";
+  const of = subject ? " de " + subject : "";
 
   return (
     <ConfirmDialog
@@ -29,8 +33,8 @@ export function MatriculaActionConfirm({
       title={isAnnul ? "¿Anular esta matrícula?" : "¿Eliminar esta matrícula?"}
       description={
         isAnnul
-          ? "La matrícula dejará de ocupar un cupo. Esta operación se volverá a validar en el servidor."
-          : "La matrícula se eliminará lógicamente y se conservará su historial."
+          ? "La matrícula" + of + " dejará de ocupar un cupo. Esta operación se volverá a validar en el servidor."
+          : "La matrícula" + of + " se eliminará lógicamente y se conservará su historial."
       }
       confirmLabel={isAnnul ? "Anular matrícula" : "Eliminar"}
       pendingLabel="Procesando..."

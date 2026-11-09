@@ -2,20 +2,12 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
-import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { FormDialog } from "@/components/admin/form-dialog";
+import { FormField } from "@/components/admin/form-field";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -23,11 +15,28 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { getApiErrorMessage } from "@/lib/api-error";
+import { notify } from "@/lib/toast";
 import { getAll as getCursos } from "@/services/cursosService";
-import { create, update } from "@/services/matriculasService";
 import { getAll as getEstudiantes } from "@/services/estudiantesService";
+import { create, update } from "@/services/matriculasService";
 import type { Matricula, MatriculaInput } from "@/types/matricula";
+
+function todayUtc(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function isCalendarDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day
+  );
+}
 
 const matriculaSchema = z.object({
   estudiante_id: z.string().min(1, "Selecciona un estudiante."),
@@ -48,49 +57,36 @@ type Props = {
   matricula?: Matricula;
 };
 
-function todayUtc(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function isCalendarDate(value: string): boolean {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-  const [year, month, day] = value.split("-").map(Number);
-  const date = new Date(Date.UTC(year, month - 1, day));
-  return (
-    date.getUTCFullYear() === year &&
-    date.getUTCMonth() === month - 1 &&
-    date.getUTCDate() === day
-  );
-}
-
 export function MatriculaForm({ open, onOpenChange, matricula }: Props) {
   const queryClient = useQueryClient();
   const [studentSearch, setStudentSearch] = useState("");
   const [courseSearch, setCourseSearch] = useState("");
-  const deferredStudentSearch = useDeferredValue(studentSearch.trim());
-  const deferredCourseSearch = useDeferredValue(courseSearch.trim());
+  const debouncedStudent = useDebouncedValue(studentSearch.trim());
+  const debouncedCourse = useDebouncedValue(courseSearch.trim());
+
   const studentsQuery = useQuery({
-    queryKey: ["matricula-estudiantes", deferredStudentSearch],
+    queryKey: ["matricula-estudiantes", debouncedStudent],
     queryFn: () =>
       getEstudiantes({
         page: 1,
         limit: 100,
         estado: "activo",
-        search: deferredStudentSearch || undefined,
+        search: debouncedStudent || undefined,
       }),
     enabled: open,
   });
   const coursesQuery = useQuery({
-    queryKey: ["matricula-cursos", deferredCourseSearch],
+    queryKey: ["matricula-cursos", debouncedCourse],
     queryFn: () =>
       getCursos({
         page: 1,
         limit: 100,
         estado: "activo",
-        search: deferredCourseSearch || undefined,
+        search: debouncedCourse || undefined,
       }),
     enabled: open,
   });
+
   const mutation = useMutation({
     mutationFn: (input: MatriculaInput) =>
       matricula ? update(matricula.id, input) : create(input),
@@ -99,6 +95,7 @@ export function MatriculaForm({ open, onOpenChange, matricula }: Props) {
         queryClient.invalidateQueries({ queryKey: ["matriculas"] }),
         queryClient.invalidateQueries({ queryKey: ["cursos"] }),
       ]);
+      notify.success(matricula ? "Matrícula actualizada." : "Matrícula registrada.");
       onOpenChange(false);
     },
   });
@@ -145,8 +142,7 @@ export function MatriculaForm({ open, onOpenChange, matricula }: Props) {
   const courseOptions = useMemo(() => {
     const options = (coursesQuery.data?.data ?? []).filter(
       (course) =>
-        course.cupos_disponibles > 0 ||
-        course.id === matricula?.curso_id,
+        course.cupos_disponibles > 0 || course.id === matricula?.curso_id,
     );
     if (
       matricula?.curso &&
@@ -157,53 +153,48 @@ export function MatriculaForm({ open, onOpenChange, matricula }: Props) {
     return options;
   }, [coursesQuery.data, matricula]);
 
-  function onSubmit(values: FormValues) {
-    mutation.mutate({
-      ...values,
-      observaciones: values.observaciones.trim() || null,
-    });
-  }
-
   const optionsError = studentsQuery.error ?? coursesQuery.error;
   const optionsLoading = studentsQuery.isPending || coursesQuery.isPending;
+  const apiError = mutation.error ?? optionsError;
 
   return (
-    <Dialog
+    <FormDialog
       open={open}
-      onOpenChange={(nextOpen) => {
-        if (!mutation.isPending) onOpenChange(nextOpen);
-      }}
+      onOpenChange={onOpenChange}
+      title={matricula ? "Editar matrícula" : "Nueva matrícula"}
+      description="Las matrículas vigentes ocupan cupo. El servidor vuelve a validar disponibilidad y relaciones al guardar."
+      submitLabel={optionsLoading ? "Cargando opciones..." : "Guardar matrícula"}
+      className="max-h-[90vh] overflow-y-auto sm:max-w-2xl"
+      pending={mutation.isPending || optionsLoading}
+      error={
+        apiError
+          ? getApiErrorMessage(
+              apiError,
+              "No se pudieron cargar o guardar los datos de matrícula.",
+            )
+          : null
+      }
+      onSubmit={handleSubmit((values) =>
+        mutation.mutate({
+          ...values,
+          observaciones: values.observaciones.trim() || null,
+        }),
+      )}
     >
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>
-            {matricula ? "Editar matrícula" : "Nueva matrícula"}
-          </DialogTitle>
-          <DialogDescription>
-            Las matrículas vigentes ocupan cupo. El backend vuelve a validar
-            disponibilidad y relaciones al guardar.
-          </DialogDescription>
-        </DialogHeader>
-
-        <form className="space-y-4" onSubmit={handleSubmit(onSubmit)} noValidate>
-          {(mutation.error || optionsError) && (
-            <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800" role="alert">
-              {getApiErrorMessage(
-                mutation.error ?? optionsError,
-                "No se pudieron cargar o guardar los datos de matrícula.",
-              )}
-            </p>
-          )}
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="matricula-estudiante-search">Buscar estudiante</Label>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-3">
+          <FormField label="Buscar estudiante">
+            {(controlProps) => (
               <Input
-                id="matricula-estudiante-search"
+                {...controlProps}
                 placeholder="Por DNI, nombre o apellido"
                 value={studentSearch}
                 onChange={(event) => setStudentSearch(event.currentTarget.value)}
               />
+            )}
+          </FormField>
+          <FormField label="Estudiante" required error={errors.estudiante_id?.message}>
+            {(controlProps) => (
               <Controller
                 control={control}
                 name="estudiante_id"
@@ -212,11 +203,7 @@ export function MatriculaForm({ open, onOpenChange, matricula }: Props) {
                     value={field.value || null}
                     onValueChange={(value) => field.onChange(value ?? "")}
                   >
-                    <SelectTrigger
-                      id="matricula-estudiante"
-                      aria-invalid={Boolean(errors.estudiante_id)}
-                      onBlur={field.onBlur}
-                    >
+                    <SelectTrigger {...controlProps} onBlur={field.onBlur}>
                       <SelectValue placeholder="Selecciona un estudiante" />
                     </SelectTrigger>
                     <SelectContent>
@@ -230,23 +217,28 @@ export function MatriculaForm({ open, onOpenChange, matricula }: Props) {
                   </Select>
                 )}
               />
-              {errors.estudiante_id && <p className="text-sm text-red-700">{errors.estudiante_id.message}</p>}
-              {studentsQuery.data?.meta.totalPages &&
-                studentsQuery.data.meta.totalPages > 1 && (
-                  <p className="text-xs text-[#64748B]">
-                    Escribe para filtrar; se muestran hasta 100 coincidencias.
-                  </p>
-                )}
-            </div>
+            )}
+          </FormField>
+          {studentsQuery.data && studentsQuery.data.meta.totalPages > 1 && (
+            <p className="text-xs text-horus-muted">
+              Escribe para filtrar; se muestran hasta 100 coincidencias.
+            </p>
+          )}
+        </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="matricula-curso-search">Buscar curso</Label>
+        <div className="space-y-3">
+          <FormField label="Buscar curso">
+            {(controlProps) => (
               <Input
-                id="matricula-curso-search"
+                {...controlProps}
                 placeholder="Por código o nombre"
                 value={courseSearch}
                 onChange={(event) => setCourseSearch(event.currentTarget.value)}
               />
+            )}
+          </FormField>
+          <FormField label="Curso" required error={errors.curso_id?.message}>
+            {(controlProps) => (
               <Controller
                 control={control}
                 name="curso_id"
@@ -255,11 +247,7 @@ export function MatriculaForm({ open, onOpenChange, matricula }: Props) {
                     value={field.value || null}
                     onValueChange={(value) => field.onChange(value ?? "")}
                   >
-                    <SelectTrigger
-                      id="matricula-curso"
-                      aria-invalid={Boolean(errors.curso_id)}
-                      onBlur={field.onBlur}
-                    >
+                    <SelectTrigger {...controlProps} onBlur={field.onBlur}>
                       <SelectValue placeholder="Selecciona un curso" />
                     </SelectTrigger>
                     <SelectContent>
@@ -272,44 +260,42 @@ export function MatriculaForm({ open, onOpenChange, matricula }: Props) {
                   </Select>
                 )}
               />
-              {errors.curso_id && <p className="text-sm text-red-700">{errors.curso_id.message}</p>}
-              {coursesQuery.data?.meta.totalPages &&
-                coursesQuery.data.meta.totalPages > 1 && (
-                  <p className="text-xs text-[#64748B]">
-                    Escribe para filtrar; se muestran cursos activos con cupos.
-                  </p>
-                )}
-            </div>
+            )}
+          </FormField>
+          {coursesQuery.data && coursesQuery.data.meta.totalPages > 1 && (
+            <p className="text-xs text-horus-muted">
+              Escribe para filtrar; se muestran cursos activos con cupos.
+            </p>
+          )}
+        </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="matricula-fecha">Fecha de matrícula</Label>
-              <Input id="matricula-fecha" type="date" aria-invalid={Boolean(errors.fecha_matricula)} {...register("fecha_matricula")} />
-              {errors.fecha_matricula && <p className="text-sm text-red-700">{errors.fecha_matricula.message}</p>}
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="matricula-estado">Estado</Label>
-              <select id="matricula-estado" className="admin-select" {...register("estado")}>
-                <option value="pendiente">Pendiente</option>
-                <option value="pagada">Pagada</option>
-                <option value="anulada">Anulada</option>
-              </select>
-            </div>
-            <div className="space-y-2 sm:col-span-2">
-              <Label htmlFor="matricula-observaciones">Observaciones</Label>
-              <textarea id="matricula-observaciones" rows={4} className="admin-textarea" {...register("observaciones")} />
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button type="button" variant="outline" disabled={mutation.isPending} onClick={() => onOpenChange(false)}>
-              Cancelar
-            </Button>
-            <Button type="submit" className="admin-btn-primary" disabled={mutation.isPending || optionsLoading}>
-              {mutation.isPending ? "Guardando..." : optionsLoading ? "Cargando opciones..." : "Guardar matrícula"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+        <FormField label="Fecha de matrícula" required error={errors.fecha_matricula?.message}>
+          {(controlProps) => (
+            <Input type="date" {...controlProps} {...register("fecha_matricula")} />
+          )}
+        </FormField>
+        <FormField label="Estado" error={errors.estado?.message}>
+          {(controlProps) => (
+            <select className="admin-select" {...controlProps} {...register("estado")}>
+              <option value="pendiente">Pendiente</option>
+              <option value="pagada">Pagada</option>
+              <option value="anulada">Anulada</option>
+            </select>
+          )}
+        </FormField>
+        <div className="sm:col-span-2">
+          <FormField label="Observaciones" error={errors.observaciones?.message}>
+            {(controlProps) => (
+              <textarea
+                rows={4}
+                className="admin-textarea"
+                {...controlProps}
+                {...register("observaciones")}
+              />
+            )}
+          </FormField>
+        </div>
+      </div>
+    </FormDialog>
   );
 }
