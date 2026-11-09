@@ -1,0 +1,597 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                                                                  BigInt                    @id @default(autoincrement())
+  name                                                                String                    @db.VarChar(255)
+  email                                                               String                    @unique(map: "users_email_unique") @db.VarChar(255)
+  emailVerifiedAt                                                     DateTime?                 @map("email_verified_at") @db.Timestamp(0)
+  password                                                            String                    @db.VarChar(255)
+  rememberToken                                                       String?                   @map("remember_token") @db.VarChar(100)
+  createdAt                                                           DateTime?                 @map("created_at") @db.Timestamp(0)
+  updatedAt                                                           DateTime?                 @map("updated_at") @db.Timestamp(0)
+  jwtVersion                                                          Int                       @default(0) @map("jwt_version")
+  aprobaciones_internas_aprobaciones_internas_aprobador_idTousers     aprobaciones_internas[]   @relation("aprobaciones_internas_aprobador_idTousers")
+  aprobaciones_internas_aprobaciones_internas_solicitante_idTousers   aprobaciones_internas[]   @relation("aprobaciones_internas_solicitante_idTousers")
+  audit_logs                                                          audit_logs[]
+  cotizacion_historial                                                cotizacion_historial[]
+  curso_publicaciones                                                 curso_publicaciones[]
+  notificaciones_internas                                             notificaciones_internas[]
+  procesos_internos_procesos_internos_created_byTousers               procesos_internos[]       @relation("procesos_internos_created_byTousers")
+  procesos_internos_procesos_internos_responsable_idTousers           procesos_internos[]       @relation("procesos_internos_responsable_idTousers")
+  reclamacion_historial                                               reclamacion_historial[]
+  reclamaciones                                                       reclamaciones[]
+  servicio_publicaciones                                              servicio_publicaciones[]
+  solicitudes_cotizacion_solicitudes_cotizacion_creado_porTousers     solicitudes_cotizacion[]  @relation("solicitudes_cotizacion_creado_porTousers")
+  solicitudes_cotizacion_solicitudes_cotizacion_responsable_idTousers solicitudes_cotizacion[]  @relation("solicitudes_cotizacion_responsable_idTousers")
+
+  @@map("users")
+}
+
+model aprobaciones_internas {
+  id                                                BigInt    @id @default(autoincrement())
+  titulo                                            String    @db.VarChar(255)
+  tipo                                              String    @default("solicitud") @db.VarChar(255)
+  descripcion                                       String?
+  estado                                            String    @default("pendiente") @db.VarChar(255)
+  solicitante_id                                    BigInt?
+  aprobador_id                                      BigInt?
+  comentario                                        String?
+  referencia                                        String?   @db.VarChar(255)
+  created_at                                        DateTime? @db.Timestamp(0)
+  updated_at                                        DateTime? @db.Timestamp(0)
+  users_aprobaciones_internas_aprobador_idTousers   User?     @relation("aprobaciones_internas_aprobador_idTousers", fields: [aprobador_id], references: [id], onUpdate: NoAction, map: "aprobaciones_internas_aprobador_id_foreign")
+  users_aprobaciones_internas_solicitante_idTousers User?     @relation("aprobaciones_internas_solicitante_idTousers", fields: [solicitante_id], references: [id], onUpdate: NoAction, map: "aprobaciones_internas_solicitante_id_foreign")
+}
+
+model audit_logs {
+  id         BigInt   @id @default(autoincrement())
+  user_id    BigInt?
+  action     String   @db.VarChar(255)
+  model_type String?  @db.VarChar(255)
+  model_id   BigInt?
+  changes    Json?    @db.Json
+  ip_address String?  @db.VarChar(255)
+  created_at DateTime @default(now()) @db.Timestamp(0)
+  users      User?    @relation(fields: [user_id], references: [id], onUpdate: NoAction, map: "audit_logs_user_id_foreign")
+}
+
+model cache {
+  key        String @id @db.VarChar(255)
+  value      String
+  expiration Int
+
+  @@index([expiration], map: "cache_expiration_index")
+}
+
+model cache_locks {
+  key        String @id @db.VarChar(255)
+  owner      String @db.VarChar(255)
+  expiration Int
+
+  @@index([expiration], map: "cache_locks_expiration_index")
+}
+
+model chat_intents {
+  id         BigInt    @id @default(autoincrement())
+  nombre     String    @unique(map: "chat_intents_nombre_unique") @db.VarChar(50)
+  keywords   Json      @db.Json
+  respuesta  String
+  prioridad  Int       @default(10)
+  activo     Boolean   @default(true)
+  created_at DateTime? @db.Timestamp(0)
+  updated_at DateTime? @db.Timestamp(0)
+}
+
+model chat_logs {
+  id               BigInt    @id @default(autoincrement())
+  session_id       String    @db.VarChar(64)
+  mensaje_usuario  String
+  respuesta_bot    String
+  intent_detectado String?   @db.VarChar(50)
+  created_at       DateTime? @db.Timestamp(0)
+  updated_at       DateTime? @db.Timestamp(0)
+  fuente           String?   @db.VarChar(16)
+
+  @@index([session_id], map: "chat_logs_session_id_index")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model cotizacion_historial {
+  id                     BigInt                 @id @default(autoincrement())
+  solicitud_id           BigInt
+  revision               Int
+  evento                 String                 @db.VarChar(255)
+  actor_id               BigInt?
+  metadatos              Json                   @db.Json
+  nota                   String?
+  actor_ambito           BigInt
+  clave_hash             String?                @db.VarChar(64)
+  huella                 String?                @db.VarChar(64)
+  created_at             DateTime               @db.DateTime(0)
+  users                  User?                  @relation(fields: [actor_id], references: [id], onUpdate: NoAction, map: "cotizacion_historial_actor_id_foreign")
+  solicitudes_cotizacion solicitudes_cotizacion @relation(fields: [solicitud_id], references: [id], onUpdate: NoAction, map: "cotizacion_historial_solicitud_id_foreign")
+
+  @@unique([solicitud_id, revision], map: "cotizacion_historial_revision_unica")
+  @@unique([solicitud_id, actor_ambito, clave_hash], map: "cotizacion_seguimiento_unico")
+  @@index([actor_id], map: "cotizacion_historial_actor_id_index")
+}
+
+model curso_publicaciones {
+  id             BigInt    @id @default(autoincrement())
+  curso_id       BigInt    @unique(map: "curso_publicaciones_curso_id_unique")
+  titulo         String    @db.VarChar(120)
+  resumen        String    @db.VarChar(500)
+  modalidad      String    @db.VarChar(30)
+  horario        String?   @db.VarChar(200)
+  inscripcion    String?   @db.VarChar(400)
+  vigente_desde  DateTime  @db.Date
+  vigente_hasta  DateTime  @db.Date
+  publicada      Boolean   @default(false)
+  autorizado_por BigInt?
+  autorizado_at  DateTime  @db.Timestamp(0)
+  created_at     DateTime? @db.Timestamp(0)
+  updated_at     DateTime? @db.Timestamp(0)
+  users          User?     @relation(fields: [autorizado_por], references: [id], onUpdate: NoAction, map: "curso_publicaciones_autorizado_por_foreign")
+  cursos         cursos    @relation(fields: [curso_id], references: [id], onUpdate: NoAction, map: "curso_publicaciones_curso_id_foreign")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model cursos {
+  id                  BigInt               @id @default(autoincrement())
+  codigo              String               @unique(map: "cursos_codigo_unique") @db.VarChar(20)
+  nombre              String               @db.VarChar(150)
+  descripcion         String
+  categoria           String               @db.VarChar(255)
+  duracion_horas      Int
+  precio              Decimal              @db.Decimal(10, 2)
+  modalidad           String               @db.VarChar(255)
+  horario             String               @db.VarChar(100)
+  cupos_maximos       Int                  @default(30)
+  cupos_disponibles   Int                  @default(30)
+  estado              String               @default("activo") @db.VarChar(255)
+  created_at          DateTime?            @db.Timestamp(0)
+  updated_at          DateTime?            @db.Timestamp(0)
+  deleted_at          DateTime?            @db.Timestamp(0)
+  curso_publicaciones curso_publicaciones?
+  matriculas          matriculas[]
+}
+
+model estudiantes {
+  id               BigInt       @id @default(autoincrement())
+  dni              String       @unique(map: "estudiantes_dni_unique") @db.VarChar(8)
+  nombres          String       @db.VarChar(100)
+  apellidos        String       @db.VarChar(100)
+  email            String?      @unique(map: "estudiantes_email_unique") @db.VarChar(150)
+  telefono         String?      @db.VarChar(20)
+  fecha_nacimiento DateTime?    @db.Date
+  direccion        String?      @db.VarChar(255)
+  estado           String       @default("activo") @db.VarChar(255)
+  created_at       DateTime?    @db.Timestamp(0)
+  updated_at       DateTime?    @db.Timestamp(0)
+  deleted_at       DateTime?    @db.Timestamp(0)
+  matriculas       matriculas[]
+}
+
+model failed_jobs {
+  id         BigInt   @id @default(autoincrement())
+  uuid       String   @unique(map: "failed_jobs_uuid_unique") @db.VarChar(255)
+  connection String
+  queue      String
+  payload    String
+  exception  String
+  failed_at  DateTime @default(now()) @db.Timestamp(0)
+}
+
+model job_batches {
+  id             String  @id @db.VarChar(255)
+  name           String  @db.VarChar(255)
+  total_jobs     Int
+  pending_jobs   Int
+  failed_jobs    Int
+  failed_job_ids String
+  options        String?
+  cancelled_at   Int?
+  created_at     Int
+  finished_at    Int?
+}
+
+model jobs {
+  id           BigInt @id @default(autoincrement())
+  queue        String @db.VarChar(255)
+  payload      String
+  attempts     Int    @db.SmallInt
+  reserved_at  Int?
+  available_at Int
+  created_at   Int
+
+  @@index([queue], map: "jobs_queue_index")
+}
+
+model matricula_notifications {
+  id               BigInt     @id @default(autoincrement())
+  matricula_id     BigInt     @unique(map: "matricula_notifications_matricula_id_unique")
+  delivery_key     String     @unique(map: "matricula_notifications_delivery_key_unique") @db.Char(36)
+  status           String     @default("pending") @db.VarChar(24)
+  attempts         Int        @default(0) @db.SmallInt
+  uncertain        Boolean    @default(false)
+  payload          String?
+  first_attempt_at DateTime?  @db.Timestamp(0)
+  available_at     DateTime?  @db.Timestamp(0)
+  dispatched_until DateTime?  @db.Timestamp(0)
+  lease            String?    @db.Char(36)
+  provider_id      String?    @db.VarChar(100)
+  last_error       String?    @db.VarChar(40)
+  created_at       DateTime?  @db.Timestamp(0)
+  updated_at       DateTime?  @db.Timestamp(0)
+  matriculas       matriculas @relation(fields: [matricula_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "matricula_notifications_matricula_id_foreign")
+
+  @@index([available_at], map: "matricula_notifications_available_at_index")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model matriculas {
+  id                      BigInt                   @id @default(autoincrement())
+  estudiante_id           BigInt
+  curso_id                BigInt
+  fecha_matricula         DateTime                 @db.Date
+  estado                  String                   @default("pendiente") @db.VarChar(255)
+  monto_pagado            Decimal?                 @db.Decimal(10, 2)
+  monto_total             Decimal?                 @db.Decimal(10, 2)
+  observaciones           String?
+  created_at              DateTime?                @db.Timestamp(0)
+  updated_at              DateTime?                @db.Timestamp(0)
+  deleted_at              DateTime?                @db.Timestamp(0)
+  matricula_notifications matricula_notifications?
+  pagos                   matricula_pagos[]
+  cursos                  cursos                   @relation(fields: [curso_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "matriculas_curso_id_foreign")
+  estudiantes             estudiantes              @relation(fields: [estudiante_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "matriculas_estudiante_id_foreign")
+
+  @@index([estudiante_id, curso_id], map: "matriculas_estudiante_id_curso_id_index")
+}
+
+model matricula_pagos {
+  id                  BigInt    @id @default(autoincrement())
+  matricula_id        BigInt
+  monto               Decimal   @db.Decimal(10, 2)
+  metodo              String    @db.VarChar(30)
+  referencia          String?   @db.VarChar(100)
+  nota                String?   @db.VarChar(500)
+  pagado_at           DateTime  @db.DateTime(0)
+  registrado_por      BigInt?
+  legacy_matricula_id BigInt?   @unique(map: "matricula_pagos_legacy_matricula_unique")
+  created_at          DateTime  @default(now()) @db.Timestamp(0)
+  matriculas          matriculas @relation(fields: [matricula_id], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "matricula_pagos_matricula_id_foreign")
+
+  @@index([matricula_id, pagado_at], map: "matricula_pagos_matricula_id_pagado_at_index")
+}
+
+model migrations {
+  id        Int    @id @default(autoincrement())
+  migration String @db.VarChar(255)
+  batch     Int
+}
+
+model model_has_permissions {
+  permission_id BigInt
+  model_type    String      @db.VarChar(255)
+  model_id      BigInt
+  permissions   permissions @relation(fields: [permission_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "model_has_permissions_permission_id_foreign")
+
+  @@id([permission_id, model_id, model_type])
+  @@index([model_id, model_type], map: "model_has_permissions_model_id_model_type_index")
+}
+
+model model_has_roles {
+  role_id    BigInt
+  model_type String @db.VarChar(255)
+  model_id   BigInt
+  roles      roles  @relation(fields: [role_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "model_has_roles_role_id_foreign")
+
+  @@id([role_id, model_id, model_type])
+  @@index([model_id, model_type], map: "model_has_roles_model_id_model_type_index")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model notificaciones_internas {
+  id         BigInt    @id @default(autoincrement())
+  user_id    BigInt?
+  titulo     String    @db.VarChar(255)
+  mensaje    String
+  tipo       String    @default("info") @db.VarChar(255)
+  leida      Boolean   @default(false)
+  vinculo    String?   @db.VarChar(255)
+  created_at DateTime? @db.Timestamp(0)
+  updated_at DateTime? @db.Timestamp(0)
+  audiencia  String    @db.VarChar(20)
+  users      User?     @relation(fields: [user_id], references: [id], onUpdate: NoAction, map: "notificaciones_internas_user_id_foreign")
+}
+
+model password_reset_tokens {
+  email      String    @id @db.VarChar(255)
+  token      String    @db.VarChar(255)
+  created_at DateTime? @db.Timestamp(0)
+}
+
+model permissions {
+  id                    BigInt                  @id @default(autoincrement())
+  name                  String                  @db.VarChar(255)
+  guard_name            String                  @db.VarChar(255)
+  created_at            DateTime?               @db.Timestamp(0)
+  updated_at            DateTime?               @db.Timestamp(0)
+  model_has_permissions model_has_permissions[]
+  role_has_permissions  role_has_permissions[]
+
+  @@unique([name, guard_name], map: "permissions_name_guard_name_unique")
+}
+
+model procesos_internos {
+  id                                            BigInt    @id @default(autoincrement())
+  titulo                                        String    @db.VarChar(255)
+  descripcion                                   String?
+  responsable_id                                BigInt?
+  estado                                        String    @default("pendiente") @db.VarChar(255)
+  prioridad                                     String    @default("media") @db.VarChar(255)
+  fecha_vencimiento                             DateTime? @db.Date
+  created_by                                    BigInt?
+  observaciones                                 String?
+  created_at                                    DateTime? @db.Timestamp(0)
+  updated_at                                    DateTime? @db.Timestamp(0)
+  users_procesos_internos_created_byTousers     User?     @relation("procesos_internos_created_byTousers", fields: [created_by], references: [id], onUpdate: NoAction, map: "procesos_internos_created_by_foreign")
+  users_procesos_internos_responsable_idTousers User?     @relation("procesos_internos_responsable_idTousers", fields: [responsable_id], references: [id], onUpdate: NoAction, map: "procesos_internos_responsable_id_foreign")
+}
+
+model reclamacion_contadores {
+  anio   Int @id @db.SmallInt
+  ultimo Int @default(0)
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model reclamacion_envios {
+  id             BigInt        @id @default(autoincrement())
+  reclamacion_id BigInt
+  tipo           String        @db.VarChar(255)
+  canal          String        @default("correo") @db.VarChar(255)
+  clave          String        @unique(map: "reclamacion_envios_clave_unique") @db.Char(36)
+  estado         String        @default("pendiente") @db.VarChar(255)
+  intentos       Int           @default(0) @db.SmallInt
+  asunto         String        @db.VarChar(200)
+  cuerpo         String
+  enviado_at     DateTime?     @db.DateTime(0)
+  proveedor_id   String?       @db.VarChar(100)
+  constancia     String?       @db.VarChar(255)
+  error_codigo   String?       @db.VarChar(40)
+  created_at     DateTime?     @db.DateTime(0)
+  updated_at     DateTime?     @db.DateTime(0)
+  reclamaciones  reclamaciones @relation(fields: [reclamacion_id], references: [id], onUpdate: NoAction, map: "reclamacion_envios_reclamacion_id_foreign")
+
+  @@index([estado, id], map: "reclamacion_envios_estado_id_index")
+  @@index([reclamacion_id], map: "reclamacion_envios_reclamacion_id_index")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model reclamacion_historial {
+  id             BigInt        @id @default(autoincrement())
+  reclamacion_id BigInt
+  evento         String        @db.VarChar(255)
+  actor_id       BigInt?
+  actor_nombre   String        @db.VarChar(120)
+  metadatos      Json          @db.Json
+  nota           String?
+  created_at     DateTime      @db.DateTime(0)
+  users          User?         @relation(fields: [actor_id], references: [id], onUpdate: NoAction, map: "reclamacion_historial_actor_id_foreign")
+  reclamaciones  reclamaciones @relation(fields: [reclamacion_id], references: [id], onUpdate: NoAction, map: "reclamacion_historial_reclamacion_id_foreign")
+
+  @@index([actor_id], map: "reclamacion_historial_actor_id_index")
+  @@index([reclamacion_id, id], map: "reclamacion_historial_reclamacion_id_id_index")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model reclamaciones {
+  id                      BigInt                  @id @default(autoincrement())
+  identificador           String                  @unique(map: "reclamaciones_identificador_unique") @db.Char(36)
+  numero                  String                  @unique(map: "reclamaciones_numero_unique") @db.VarChar(14)
+  token_envio             String                  @unique(map: "reclamaciones_token_envio_unique") @db.Char(64)
+  canal                   String                  @default("web") @db.VarChar(255)
+  numero_hoja_respaldo    String?                 @db.VarChar(20)
+  estado                  String                  @default("abierto") @db.VarChar(255)
+  recibida_at             DateTime                @db.DateTime(0)
+  fecha_limite            DateTime                @db.Date
+  suspension_desde        DateTime?               @db.Date
+  suspension_hasta        DateTime?               @db.Date
+  nombres                 String                  @db.VarChar(120)
+  apellidos               String                  @db.VarChar(120)
+  tipo_documento          String                  @db.VarChar(255)
+  numero_documento        String                  @db.VarChar(20)
+  domicilio               String                  @db.VarChar(255)
+  telefono                String                  @db.VarChar(30)
+  email                   String                  @db.VarChar(254)
+  canal_respuesta         String                  @default("correo") @db.VarChar(255)
+  es_menor                Boolean                 @default(false)
+  representante_nombre    String?                 @db.VarChar(120)
+  representante_domicilio String?                 @db.VarChar(255)
+  representante_telefono  String?                 @db.VarChar(30)
+  representante_email     String?                 @db.VarChar(254)
+  tipo                    String                  @db.VarChar(255)
+  bien_tipo               String?                 @db.VarChar(255)
+  bien_descripcion        String?                 @db.VarChar(500)
+  monto_bien              Decimal?                @db.Decimal(12, 2)
+  detalle                 String
+  pedido                  String
+  respuesta               String?
+  respondida_at           DateTime?               @db.DateTime(0)
+  responsable_id          BigInt?
+  privacidad_version      String                  @db.VarChar(20)
+  informado_at            DateTime                @db.DateTime(0)
+  created_at              DateTime?               @db.DateTime(0)
+  updated_at              DateTime?               @db.DateTime(0)
+  reclamacion_envios      reclamacion_envios[]
+  reclamacion_historial   reclamacion_historial[]
+  users                   User?                   @relation(fields: [responsable_id], references: [id], onUpdate: NoAction, map: "reclamaciones_responsable_id_foreign")
+
+  @@index([estado, fecha_limite], map: "reclamaciones_estado_fecha_limite_index")
+  @@index([numero_documento], map: "reclamaciones_numero_documento_index")
+  @@index([recibida_at], map: "reclamaciones_recibida_at_index")
+  @@index([responsable_id], map: "reclamaciones_responsable_id_index")
+}
+
+model role_has_permissions {
+  permission_id BigInt
+  role_id       BigInt
+  permissions   permissions @relation(fields: [permission_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "role_has_permissions_permission_id_foreign")
+  roles         roles       @relation(fields: [role_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "role_has_permissions_role_id_foreign")
+
+  @@id([permission_id, role_id])
+}
+
+model roles {
+  id                   BigInt                 @id @default(autoincrement())
+  name                 String                 @db.VarChar(255)
+  guard_name           String                 @db.VarChar(255)
+  created_at           DateTime?              @db.Timestamp(0)
+  updated_at           DateTime?              @db.Timestamp(0)
+  model_has_roles      model_has_roles[]
+  role_has_permissions role_has_permissions[]
+
+  @@unique([name, guard_name], map: "roles_name_guard_name_unique")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model servicio_publicacion_elementos {
+  id                      BigInt                 @id @default(autoincrement())
+  servicio_publicacion_id BigInt
+  titulo                  String                 @db.VarChar(120)
+  descripcion             String
+  caracteristicas         Json?                  @db.Json
+  icono                   String?                @db.VarChar(60)
+  variante_imagen         String?                @db.VarChar(20)
+  imagen_ruta             String?                @db.VarChar(255)
+  imagen_alt              String?                @db.VarChar(160)
+  orden                   Int                    @default(0)
+  activo                  Boolean                @default(true)
+  created_at              DateTime?              @db.Timestamp(0)
+  updated_at              DateTime?              @db.Timestamp(0)
+  servicio_publicaciones  servicio_publicaciones @relation(fields: [servicio_publicacion_id], references: [id], onUpdate: NoAction, map: "servicio_publicacion_elementos_servicio_publicacion_id_foreign")
+
+  @@index([servicio_publicacion_id, activo, orden, id], map: "servicio_elementos_visualizacion")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model servicio_publicaciones {
+  id                             BigInt                           @id @default(autoincrement())
+  servicio_tecnologico_id        BigInt                           @unique(map: "servicio_publicaciones_servicio_tecnologico_id_unique")
+  titulo                         String                           @db.VarChar(120)
+  resumen                        String                           @db.VarChar(500)
+  descripcion                    String
+  categoria                      String?                          @db.VarChar(80)
+  estado                         String                           @default("borrador") @db.VarChar(255)
+  vigente_desde                  DateTime                         @db.Date
+  vigente_hasta                  DateTime                         @db.Date
+  autorizado_por                 BigInt?
+  autorizado_at                  DateTime?                        @db.Timestamp(0)
+  created_at                     DateTime?                        @db.Timestamp(0)
+  updated_at                     DateTime?                        @db.Timestamp(0)
+  titulo_tarjetas                String?                          @db.VarChar(120)
+  imagen_principal_ruta          String?                          @db.VarChar(255)
+  imagen_principal_alt           String?                          @db.VarChar(160)
+  servicio_publicacion_elementos servicio_publicacion_elementos[]
+  users                          User?                            @relation(fields: [autorizado_por], references: [id], onUpdate: NoAction, map: "servicio_publicaciones_autorizado_por_foreign")
+  servicios_tecnologicos         servicios_tecnologicos           @relation(fields: [servicio_tecnologico_id], references: [id], onUpdate: NoAction, map: "servicio_publicaciones_servicio_tecnologico_id_foreign")
+
+  @@index([estado, vigente_hasta, vigente_desde], map: "servicio_publicaciones_vigencia")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model servicios_tecnologicos {
+  id                     BigInt                   @id @default(autoincrement())
+  identificador_publico  String                   @unique(map: "servicios_tecnologicos_identificador_publico_unique") @db.Char(36)
+  codigo                 String                   @unique(map: "servicios_tecnologicos_codigo_unique") @db.VarChar(40)
+  nombre                 String                   @db.VarChar(120)
+  categoria              String?                  @db.VarChar(80)
+  estado                 String                   @default("inactivo") @db.VarChar(255)
+  revision               Int                      @default(1)
+  created_at             DateTime?                @db.Timestamp(0)
+  updated_at             DateTime?                @db.Timestamp(0)
+  servicio_publicaciones servicio_publicaciones?
+  solicitudes_cotizacion solicitudes_cotizacion[]
+
+  @@index([estado, id], map: "servicios_tecnologicos_estado_id_index")
+}
+
+model sessions {
+  id            String  @id @db.VarChar(255)
+  user_id       BigInt?
+  ip_address    String? @db.VarChar(45)
+  user_agent    String?
+  payload       String
+  last_activity Int
+
+  @@index([last_activity], map: "sessions_last_activity_index")
+  @@index([user_id], map: "sessions_user_id_index")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model solicitudes_cotizacion {
+  id                                                 BigInt                  @id @default(autoincrement())
+  identificador                                      String                  @unique(map: "solicitudes_cotizacion_identificador_unique") @db.Char(36)
+  codigo                                             String                  @unique(map: "solicitudes_cotizacion_codigo_unique") @db.VarChar(40)
+  recibida_at                                        DateTime                @db.DateTime(0)
+  servicio_id                                        BigInt?
+  servicio_uuid                                      String?                 @db.Char(36)
+  servicio_nombre_historico                          String?                 @db.VarChar(120)
+  necesidad_cliente                                  String
+  contacto_nombre                                    String                  @db.VarChar(120)
+  contacto_email                                     String?                 @db.VarChar(254)
+  contacto_telefono                                  String?                 @db.VarChar(30)
+  estado                                             String                  @default("recibida") @db.VarChar(255)
+  responsable_id                                     BigInt?
+  creado_por                                         BigInt?
+  ultimo_seguimiento_at                              DateTime?               @db.DateTime(0)
+  proximo_seguimiento                                DateTime?               @db.Date
+  revision                                           Int                     @default(1)
+  creador_ambito                                     BigInt
+  creacion_clave_hash                                String                  @db.VarChar(64)
+  creacion_huella                                    String                  @db.VarChar(64)
+  created_at                                         DateTime?               @db.DateTime(0)
+  updated_at                                         DateTime?               @db.DateTime(0)
+  origen                                             String                  @default("administrativo") @db.VarChar(255)
+  cotizacion_historial                               cotizacion_historial[]
+  users_solicitudes_cotizacion_creado_porTousers     User?                   @relation("solicitudes_cotizacion_creado_porTousers", fields: [creado_por], references: [id], onUpdate: NoAction, map: "solicitudes_cotizacion_creado_por_foreign")
+  users_solicitudes_cotizacion_responsable_idTousers User?                   @relation("solicitudes_cotizacion_responsable_idTousers", fields: [responsable_id], references: [id], onUpdate: NoAction, map: "solicitudes_cotizacion_responsable_id_foreign")
+  servicios_tecnologicos                             servicios_tecnologicos? @relation(fields: [servicio_id], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "solicitudes_cotizacion_servicio_id_foreign")
+
+  @@unique([creador_ambito, creacion_clave_hash], map: "cotizaciones_creacion_unica")
+  @@index([creado_por], map: "solicitudes_cotizacion_creado_por_index")
+  @@index([estado, id], map: "solicitudes_cotizacion_estado_id_index")
+  @@index([proximo_seguimiento, id], map: "solicitudes_cotizacion_proximo_seguimiento_id_index")
+  @@index([recibida_at, id], map: "solicitudes_cotizacion_recibida_at_id_index")
+  @@index([responsable_id, id], map: "solicitudes_cotizacion_responsable_id_id_index")
+  @@index([servicio_id], map: "solicitudes_cotizacion_servicio_id_index")
+  @@index([servicio_uuid, id], map: "solicitudes_cotizacion_servicio_uuid_id_index")
+}
+
+model system_settings {
+  id          BigInt    @id @default(autoincrement())
+  key         String    @unique(map: "system_settings_key_unique") @db.VarChar(255)
+  value       String?
+  description String?
+  created_at  DateTime? @db.Timestamp(0)
+  updated_at  DateTime? @db.Timestamp(0)
+}
+
+enum footer_link_category_enum {
+  legal
+  contacto
+  redes
+}
+
+enum user_role_enum {
+  admin
+  editor
+}
