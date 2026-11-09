@@ -6,144 +6,123 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import axios from "axios";
 import { Plus } from "lucide-react";
-import { useDeferredValue, useState } from "react";
+import { useMemo, useState } from "react";
+import { cursoColumns } from "@/components/admin/cursos/columns";
 import { CursoArchiveConfirm } from "@/components/admin/cursos/CursoArchiveConfirm";
 import { CursoForm } from "@/components/admin/cursos/CursoForm";
-import { CursoTable } from "@/components/admin/cursos/CursoTable";
+import { DataTable } from "@/components/admin/data-table";
+import { ErrorBanner } from "@/components/admin/error-banner";
+import { PageHeader } from "@/components/admin/page-header";
 import { SearchInput } from "@/components/admin/search-input";
 import { Button } from "@/components/ui/button";
+import { useUrlListState } from "@/hooks/use-url-list-state";
+import { getApiErrorMessage } from "@/lib/api-error";
+import { can } from "@/lib/permissions";
+import { notify } from "@/lib/toast";
 import { archive, getAll, restore } from "@/services/cursosService";
 import type { Curso, CursoCategoria, CursoEstado } from "@/types/curso";
 
-type CursosPageClientProps = { permissions: string[] };
+const LIST_FILTERS = { categoria: "", estado: "", vista: "activos" };
 
-function getErrorMessage(error: unknown): string {
-  if (axios.isAxiosError(error)) {
-    const data: unknown = error.response?.data;
-    if (typeof data === "object" && data !== null && "message" in data) {
-      const { message } = data;
-      if (typeof message === "string") return message;
-      if (Array.isArray(message) && message.every((item) => typeof item === "string")) {
-        return message.join(" ");
-      }
-    }
-  }
-  return "No fue posible cargar los cursos. Inténtalo nuevamente.";
-}
+type Props = { permissions: readonly string[] };
 
-export function CursosPageClient({ permissions }: CursosPageClientProps) {
+export function CursosPageClient({ permissions }: Props) {
+  const canCreate = can(permissions, "cursos.crear");
+  const canEdit = can(permissions, "cursos.editar");
+  const canArchive = can(permissions, "cursos.eliminar");
+  const canRestore = can(permissions, "cursos.restaurar");
+
   const queryClient = useQueryClient();
-  const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 10 });
-  const [search, setSearch] = useState("");
-  const [categoria, setCategoria] = useState<CursoCategoria | "">("");
-  const [estado, setEstado] = useState<CursoEstado | "">("");
-  const [eliminados, setEliminados] = useState(false);
+  const list = useUrlListState({ filters: LIST_FILTERS });
+  const eliminados = list.filters.vista === "eliminados";
   const [formOpen, setFormOpen] = useState(false);
-  const [editingCurso, setEditingCurso] = useState<Curso>();
-  const [cursoToArchive, setCursoToArchive] = useState<Curso>();
-  const deferredSearch = useDeferredValue(search.trim());
+  const [editing, setEditing] = useState<Curso>();
+  const [toArchive, setToArchive] = useState<Curso>();
 
   const cursosQuery = useQuery({
-    queryKey: [
-      "cursos",
-      pagination.pageIndex,
-      pagination.pageSize,
-      deferredSearch,
-      categoria,
-      estado,
-      eliminados,
-    ],
+    queryKey: ["cursos", list.params, list.filters],
     queryFn: () =>
       getAll({
-        page: pagination.pageIndex + 1,
-        limit: pagination.pageSize,
-        search: deferredSearch || undefined,
-        categoria: categoria || undefined,
-        estado: estado || undefined,
+        ...list.params,
+        categoria: (list.filters.categoria || undefined) as CursoCategoria | undefined,
+        estado: (list.filters.estado || undefined) as CursoEstado | undefined,
         eliminados,
       }),
     placeholderData: keepPreviousData,
   });
+
   const archiveMutation = useMutation({
     mutationFn: archive,
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["cursos"] });
-      setCursoToArchive(undefined);
+      notify.success("Curso desactivado.");
+      setToArchive(undefined);
     },
   });
   const restoreMutation = useMutation({
     mutationFn: restore,
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["cursos"] });
+      notify.success("Curso restaurado.");
     },
   });
 
-  function resetPage() {
-    setPagination((current) => ({ ...current, pageIndex: 0 }));
-  }
-
-  function openCreateForm() {
-    setEditingCurso(undefined);
-    setFormOpen(true);
-  }
-
-  function openEditForm(curso: Curso) {
-    setEditingCurso(curso);
-    setFormOpen(true);
-  }
-
-  function changeFormOpen(open: boolean) {
-    setFormOpen(open);
-    if (!open) setEditingCurso(undefined);
-  }
-
-  const data = cursosQuery.data?.data ?? [];
-  const total = cursosQuery.data?.meta.total ?? 0;
-  const pageCount = cursosQuery.data?.meta.totalPages ?? 0;
+  const columns = useMemo(
+    () =>
+      cursoColumns({
+        eliminados,
+        onEdit: canEdit
+          ? (curso) => {
+              setEditing(curso);
+              setFormOpen(true);
+            }
+          : undefined,
+        onArchive: canArchive ? setToArchive : undefined,
+        onRestore: canRestore ? (curso) => restoreMutation.mutate(curso.id) : undefined,
+        restoringId: restoreMutation.isPending ? restoreMutation.variables : undefined,
+      }),
+    [canArchive, canEdit, canRestore, eliminados, restoreMutation],
+  );
 
   return (
     <section className="space-y-6">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#176B9A]">
-            Gestión académica
-          </p>
-          <h1 className="mt-1 text-2xl font-bold tracking-tight text-[#172B3A] sm:text-3xl">
-            Cursos
-          </h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-[#64748B]">
-            Administra la oferta de cursos, modalidades y cupos disponibles.
-          </p>
-        </div>
-        {!eliminados && permissions.includes("cursos.crear") && (
-          <Button type="button" className="admin-btn-primary" onClick={openCreateForm}>
-            <Plus aria-hidden="true" />
-            Nuevo curso
-          </Button>
-        )}
-      </header>
+      <PageHeader
+        eyebrow="Gestión académica"
+        title="Cursos"
+        description="Administra la oferta de cursos, modalidades y cupos disponibles."
+        actions={
+          !eliminados &&
+          canCreate && (
+            <Button
+              type="button"
+              className="admin-btn-primary"
+              onClick={() => {
+                setEditing(undefined);
+                setFormOpen(true);
+              }}
+            >
+              <Plus aria-hidden="true" /> Nuevo curso
+            </Button>
+          )
+        }
+      />
 
-      <div className="rounded-2xl border border-[#E2E8F0] bg-white p-4 shadow-[0_2px_10px_rgba(10,37,64,0.04)]">
+      <div className="rounded-2xl border border-horus-line bg-white p-4 shadow-[0_2px_10px_rgba(10,37,64,0.04)]">
         <div className="mb-4 flex flex-wrap items-center gap-2">
           <Button
             type="button"
+            aria-pressed={!eliminados}
             variant={eliminados ? "outline" : "default"}
-            onClick={() => {
-              setEliminados(false);
-              resetPage();
-            }}
+            onClick={() => list.setFilter("vista", "activos")}
           >
             Activos y vigentes
           </Button>
           <Button
             type="button"
+            aria-pressed={eliminados}
             variant={eliminados ? "default" : "outline"}
-            onClick={() => {
-              setEliminados(true);
-              resetPage();
-            }}
+            onClick={() => list.setFilter("vista", "eliminados")}
           >
             Eliminados
           </Button>
@@ -152,21 +131,15 @@ export function CursosPageClient({ permissions }: CursosPageClientProps) {
           <SearchInput
             aria-label="Buscar cursos por código o nombre"
             placeholder="Buscar por código o nombre"
-            value={search}
-            onChange={(event) => {
-              setSearch(event.currentTarget.value);
-              resetPage();
-            }}
+            value={list.searchInput}
+            onChange={(event) => list.setSearch(event.currentTarget.value)}
           />
           <label>
             <span className="sr-only">Filtrar por categoría</span>
             <select
               className="admin-select"
-              value={categoria}
-              onChange={(event) => {
-                setCategoria(event.currentTarget.value as CursoCategoria | "");
-                resetPage();
-              }}
+              value={list.filters.categoria}
+              onChange={(event) => list.setFilter("categoria", event.currentTarget.value)}
             >
               <option value="">Todas las categorías</option>
               <option value="tecnologia">Tecnología</option>
@@ -180,11 +153,8 @@ export function CursosPageClient({ permissions }: CursosPageClientProps) {
             <span className="sr-only">Filtrar por estado</span>
             <select
               className="admin-select"
-              value={estado}
-              onChange={(event) => {
-                setEstado(event.currentTarget.value as CursoEstado | "");
-                resetPage();
-              }}
+              value={list.filters.estado}
+              onChange={(event) => list.setFilter("estado", event.currentTarget.value)}
             >
               <option value="">Todos los estados</option>
               <option value="activo">Activo</option>
@@ -193,53 +163,61 @@ export function CursosPageClient({ permissions }: CursosPageClientProps) {
             </select>
           </label>
         </div>
-        {cursosQuery.isFetching && (
-          <p className="mt-3 text-xs text-[#64748B]" role="status">Actualizando resultados…</p>
+        {cursosQuery.isFetching && !cursosQuery.isPending && (
+          <p className="mt-3 text-xs text-horus-muted" role="status">
+            Actualizando resultados…
+          </p>
         )}
       </div>
 
-      {(cursosQuery.error || archiveMutation.error || restoreMutation.error) && (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">
-          {getErrorMessage(cursosQuery.error ?? archiveMutation.error ?? restoreMutation.error)}
-          {cursosQuery.error && (
-            <button type="button" className="ml-2 font-semibold underline" onClick={() => void cursosQuery.refetch()}>
-              Reintentar
-            </button>
-          )}
-        </div>
+      {cursosQuery.error && (
+        <ErrorBanner
+          message={getApiErrorMessage(cursosQuery.error, "No fue posible cargar los cursos.")}
+          onRetry={() => void cursosQuery.refetch()}
+        />
       )}
-
-      {cursosQuery.isPending ? (
-        <div className="rounded-2xl border border-[#E2E8F0] bg-white px-4 py-12 text-center text-sm text-[#64748B]">
-          Cargando cursos…
-        </div>
-      ) : (
-        <CursoTable
-          data={data}
-          total={total}
-          pageCount={pageCount}
-          pagination={pagination}
-          eliminados={eliminados}
-          canEdit={permissions.includes("cursos.editar")}
-          canArchive={permissions.includes("cursos.eliminar")}
-          canRestore={permissions.includes("cursos.restaurar")}
-          onPaginationChange={setPagination}
-          onEdit={openEditForm}
-          onArchive={setCursoToArchive}
-          onRestore={(curso) => restoreMutation.mutate(curso.id)}
+      {(archiveMutation.error || restoreMutation.error) && (
+        <ErrorBanner
+          message={getApiErrorMessage(
+            archiveMutation.error ?? restoreMutation.error,
+            "No se pudo completar la acción.",
+          )}
         />
       )}
 
-      <CursoForm open={formOpen} onOpenChange={changeFormOpen} curso={editingCurso} />
-      <CursoArchiveConfirm
-        open={Boolean(cursoToArchive)}
+      <DataTable
+        columns={columns}
+        data={cursosQuery.data?.data ?? []}
+        caption={eliminados ? "Cursos eliminados" : "Cursos"}
+        total={cursosQuery.data?.meta.total ?? 0}
+        pageCount={cursosQuery.data?.meta.totalPages ?? 0}
+        pagination={list.pagination}
+        onPaginationChange={list.setPagination}
+        sorting={list.sorting}
+        onSortingChange={list.setSorting}
+        isLoading={cursosQuery.isPending}
+        emptyMessage={eliminados ? "No hay cursos eliminados." : "No se encontraron cursos."}
+        itemLabel={{ singular: "curso", plural: "cursos" }}
+        getRowId={(curso) => curso.id}
+      />
+
+      <CursoForm
+        open={formOpen}
         onOpenChange={(open) => {
-          if (!open && !archiveMutation.isPending) setCursoToArchive(undefined);
+          setFormOpen(open);
+          if (!open) setEditing(undefined);
         }}
-        cursoName={cursoToArchive?.nombre}
+        curso={editing}
+      />
+      <CursoArchiveConfirm
+        open={Boolean(toArchive)}
+        onOpenChange={(open) => {
+          if (!open && !archiveMutation.isPending) setToArchive(undefined);
+        }}
+        cursoName={toArchive?.nombre}
         pending={archiveMutation.isPending}
         onConfirm={() => {
-          if (cursoToArchive) archiveMutation.mutate(cursoToArchive.id);
+          if (toArchive) archiveMutation.mutate(toArchive.id);
         }}
       />
     </section>

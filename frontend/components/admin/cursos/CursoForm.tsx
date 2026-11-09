@@ -2,21 +2,14 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import axios from "axios";
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { FormDialog } from "@/components/admin/form-dialog";
+import { FormField } from "@/components/admin/form-field";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { getApiErrorMessage } from "@/lib/api-error";
+import { notify } from "@/lib/toast";
 import { create, update } from "@/services/cursosService";
 import type { Curso, CursoInput } from "@/types/curso";
 
@@ -43,40 +36,35 @@ const cursoSchema = z.object({
   estado: z.enum(["activo", "inactivo", "archivado"]),
 });
 
-type CursoFormValues = z.infer<typeof cursoSchema>;
+type FormValues = z.infer<typeof cursoSchema>;
 
-type CursoFormProps = {
+const EMPTY: FormValues = {
+  codigo: "",
+  nombre: "",
+  descripcion: "",
+  categoria: "tecnologia",
+  duracion_horas: "",
+  precio: "",
+  modalidad: "presencial",
+  horario: "",
+  cupos_maximos: "30",
+  estado: "activo",
+};
+
+type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   curso?: Curso;
 };
 
-function getErrorMessage(error: unknown): string {
-  if (axios.isAxiosError(error)) {
-    const data: unknown = error.response?.data;
-    if (typeof data === "object" && data !== null && "message" in data) {
-      const { message } = data;
-      if ("errors" in data && typeof data.errors === "object" && data.errors !== null) {
-        const messages = Object.values(data.errors).flatMap((value) =>
-          Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [],
-        );
-        if (messages.length > 0) return messages.join(" ");
-      }
-      if (typeof message === "string") return message;
-      if (Array.isArray(message) && message.every((item) => typeof item === "string")) return message.join(" ");
-    }
-  }
-
-  return "No se pudo guardar el curso. Inténtalo nuevamente.";
-}
-
-export function CursoForm({ open, onOpenChange, curso }: CursoFormProps) {
+export function CursoForm({ open, onOpenChange, curso }: Props) {
   const queryClient = useQueryClient();
   const mutation = useMutation({
     mutationFn: (input: CursoInput) =>
       curso ? update(curso.id, input) : create(input),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["cursos"] });
+      notify.success(curso ? "Curso actualizado." : "Curso creado.");
       onOpenChange(false);
     },
   });
@@ -85,159 +73,120 @@ export function CursoForm({ open, onOpenChange, curso }: CursoFormProps) {
     register,
     handleSubmit,
     reset,
-    formState: { errors, isSubmitting },
-  } = useForm<CursoFormValues>({
+    formState: { errors },
+  } = useForm<FormValues>({
     resolver: zodResolver(cursoSchema),
-    defaultValues: {
-      codigo: "",
-      nombre: "",
-      descripcion: "",
-      categoria: "tecnologia",
-      duracion_horas: "",
-      precio: "",
-      modalidad: "presencial",
-      horario: "",
-      cupos_maximos: "30",
-      estado: "activo",
-    },
+    defaultValues: EMPTY,
   });
 
   useEffect(() => {
-    reset({
-      codigo: curso?.codigo ?? "",
-      nombre: curso?.nombre ?? "",
-      descripcion: curso?.descripcion ?? "",
-      categoria: curso?.categoria ?? "tecnologia",
-      duracion_horas: curso ? String(curso.duracion_horas) : "",
-      precio: curso?.precio ?? "",
-      modalidad: curso?.modalidad ?? "presencial",
-      horario: curso?.horario ?? "",
-      cupos_maximos: curso ? String(curso.cupos_maximos) : "30",
-      estado: curso?.estado ?? "activo",
-    });
+    reset(
+      curso
+        ? {
+            codigo: curso.codigo,
+            nombre: curso.nombre,
+            descripcion: curso.descripcion,
+            categoria: curso.categoria,
+            duracion_horas: String(curso.duracion_horas),
+            precio: curso.precio,
+            modalidad: curso.modalidad,
+            horario: curso.horario,
+            cupos_maximos: String(curso.cupos_maximos),
+            estado: curso.estado,
+          }
+        : EMPTY,
+    );
     resetMutation();
   }, [curso, open, reset, resetMutation]);
 
-  function onSubmit(values: CursoFormValues) {
-    mutation.mutate({
-      ...values,
-      duracion_horas: Number(values.duracion_horas),
-      precio: Number(values.precio),
-      cupos_maximos: Number(values.cupos_maximos),
-    });
-  }
-
   return (
-    <Dialog
+    <FormDialog
       open={open}
-      onOpenChange={(nextOpen) => {
-        if (!mutation.isPending) {
-          onOpenChange(nextOpen);
-        }
-      }}
+      onOpenChange={onOpenChange}
+      title={curso ? "Editar curso" : "Nuevo curso"}
+      description="Completa los datos administrativos del curso. Su publicación pública es un proceso separado."
+      submitLabel="Guardar curso"
+      className="max-h-[90vh] overflow-y-auto sm:max-w-2xl"
+      pending={mutation.isPending}
+      error={
+        mutation.error
+          ? getApiErrorMessage(mutation.error, "No se pudo guardar el curso.")
+          : null
+      }
+      onSubmit={handleSubmit((values) =>
+        mutation.mutate({
+          ...values,
+          duracion_horas: Number(values.duracion_horas),
+          precio: Number(values.precio),
+          cupos_maximos: Number(values.cupos_maximos),
+        }),
+      )}
     >
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>{curso ? "Editar curso" : "Nuevo curso"}</DialogTitle>
-          <DialogDescription>
-            Completa los datos administrativos del curso. Su publicación pública
-            es un proceso separado.
-          </DialogDescription>
-        </DialogHeader>
-
-        <form className="space-y-4" onSubmit={handleSubmit(onSubmit)} noValidate>
-          {mutation.error && (
-            <p
-              className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800"
-              role="alert"
-            >
-              {getErrorMessage(mutation.error)}
-            </p>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <FormField label="Código" required error={errors.codigo?.message}>
+          {(control) => <Input maxLength={20} {...control} {...register("codigo")} />}
+        </FormField>
+        <FormField label="Nombre del curso" required error={errors.nombre?.message}>
+          {(control) => <Input maxLength={150} {...control} {...register("nombre")} />}
+        </FormField>
+        <FormField label="Categoría" error={errors.categoria?.message}>
+          {(control) => (
+            <select className="admin-select" {...control} {...register("categoria")}>
+              <option value="tecnologia">Tecnología</option>
+              <option value="educacion">Educación</option>
+              <option value="salud">Salud</option>
+              <option value="gestion">Gestión</option>
+              <option value="otros">Otros</option>
+            </select>
           )}
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="curso-codigo">Código</Label>
-              <Input id="curso-codigo" maxLength={20} aria-invalid={Boolean(errors.codigo)} {...register("codigo")} />
-              {errors.codigo && <p className="text-sm text-red-700">{errors.codigo.message}</p>}
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="curso-nombre">Nombre del curso</Label>
-              <Input id="curso-nombre" maxLength={150} aria-invalid={Boolean(errors.nombre)} {...register("nombre")} />
-              {errors.nombre && <p className="text-sm text-red-700">{errors.nombre.message}</p>}
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="curso-categoria">Categoría</Label>
-              <select id="curso-categoria" className="admin-select" {...register("categoria")}>
-                <option value="tecnologia">Tecnología</option>
-                <option value="educacion">Educación</option>
-                <option value="salud">Salud</option>
-                <option value="gestion">Gestión</option>
-                <option value="otros">Otros</option>
-              </select>
-              {errors.categoria && <p className="text-sm text-red-700">{errors.categoria.message}</p>}
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="curso-modalidad">Modalidad</Label>
-              <select id="curso-modalidad" className="admin-select" {...register("modalidad")}>
-                <option value="presencial">Presencial</option>
-                <option value="virtual">Virtual</option>
-                <option value="hibrido">Híbrido</option>
-              </select>
-              {errors.modalidad && <p className="text-sm text-red-700">{errors.modalidad.message}</p>}
-            </div>
-            <div className="space-y-2 sm:col-span-2">
-              <Label htmlFor="curso-descripcion">Descripción</Label>
+        </FormField>
+        <FormField label="Modalidad" error={errors.modalidad?.message}>
+          {(control) => (
+            <select className="admin-select" {...control} {...register("modalidad")}>
+              <option value="presencial">Presencial</option>
+              <option value="virtual">Virtual</option>
+              <option value="hibrido">Híbrido</option>
+            </select>
+          )}
+        </FormField>
+        <div className="sm:col-span-2">
+          <FormField label="Descripción" required error={errors.descripcion?.message}>
+            {(control) => (
               <textarea
-                id="curso-descripcion"
                 rows={4}
                 className="admin-textarea"
-                aria-invalid={Boolean(errors.descripcion)}
+                {...control}
                 {...register("descripcion")}
               />
-              {errors.descripcion && <p className="text-sm text-red-700">{errors.descripcion.message}</p>}
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="curso-duracion">Duración (horas)</Label>
-              <Input id="curso-duracion" inputMode="numeric" aria-invalid={Boolean(errors.duracion_horas)} {...register("duracion_horas")} />
-              {errors.duracion_horas && <p className="text-sm text-red-700">{errors.duracion_horas.message}</p>}
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="curso-precio">Precio (S/)</Label>
-              <Input id="curso-precio" inputMode="decimal" aria-invalid={Boolean(errors.precio)} {...register("precio")} />
-              {errors.precio && <p className="text-sm text-red-700">{errors.precio.message}</p>}
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="curso-horario">Horario</Label>
-              <Input id="curso-horario" maxLength={100} aria-invalid={Boolean(errors.horario)} {...register("horario")} />
-              {errors.horario && <p className="text-sm text-red-700">{errors.horario.message}</p>}
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="curso-cupos">Cupos máximos</Label>
-              <Input id="curso-cupos" inputMode="numeric" aria-invalid={Boolean(errors.cupos_maximos)} {...register("cupos_maximos")} />
-              {errors.cupos_maximos && <p className="text-sm text-red-700">{errors.cupos_maximos.message}</p>}
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="curso-estado">Estado</Label>
-              <select id="curso-estado" className="admin-select" {...register("estado")}>
-                <option value="activo">Activo</option>
-                <option value="inactivo">Inactivo</option>
-                <option value="archivado">Archivado</option>
-              </select>
-              {errors.estado && <p className="text-sm text-red-700">{errors.estado.message}</p>}
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button type="button" variant="outline" disabled={mutation.isPending} onClick={() => onOpenChange(false)}>
-              Cancelar
-            </Button>
-            <Button type="submit" disabled={mutation.isPending || isSubmitting}>
-              {mutation.isPending ? "Guardando..." : "Guardar curso"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+            )}
+          </FormField>
+        </div>
+        <FormField label="Duración (horas)" required error={errors.duracion_horas?.message}>
+          {(control) => (
+            <Input inputMode="numeric" {...control} {...register("duracion_horas")} />
+          )}
+        </FormField>
+        <FormField label="Precio (S/)" required error={errors.precio?.message}>
+          {(control) => <Input inputMode="decimal" {...control} {...register("precio")} />}
+        </FormField>
+        <FormField label="Horario" required error={errors.horario?.message}>
+          {(control) => <Input maxLength={100} {...control} {...register("horario")} />}
+        </FormField>
+        <FormField label="Cupos máximos" required error={errors.cupos_maximos?.message}>
+          {(control) => (
+            <Input inputMode="numeric" {...control} {...register("cupos_maximos")} />
+          )}
+        </FormField>
+        <FormField label="Estado" error={errors.estado?.message}>
+          {(control) => (
+            <select className="admin-select" {...control} {...register("estado")}>
+              <option value="activo">Activo</option>
+              <option value="inactivo">Inactivo</option>
+              <option value="archivado">Archivado</option>
+            </select>
+          )}
+        </FormField>
+      </div>
+    </FormDialog>
   );
 }
