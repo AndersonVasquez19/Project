@@ -7,52 +7,55 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
-import { useDeferredValue, useState } from "react";
+import { useMemo, useState } from "react";
+import { DataTable } from "@/components/admin/data-table";
+import { ErrorBanner } from "@/components/admin/error-banner";
+import { estudianteColumns } from "@/components/admin/estudiantes/columns";
 import { EstudianteArchiveConfirm } from "@/components/admin/estudiantes/EstudianteArchiveConfirm";
 import { EstudianteForm } from "@/components/admin/estudiantes/EstudianteForm";
-import { EstudianteTable } from "@/components/admin/estudiantes/EstudianteTable";
+import { PageHeader } from "@/components/admin/page-header";
 import { SearchInput } from "@/components/admin/search-input";
 import { Button } from "@/components/ui/button";
+import { useUrlListState } from "@/hooks/use-url-list-state";
+import { getApiErrorMessage } from "@/lib/api-error";
+import { can } from "@/lib/permissions";
+import { notify } from "@/lib/toast";
 import { archive, getAll, restore } from "@/services/estudiantesService";
 import type { EstadoEstudiante, Estudiante } from "@/types/estudiante";
-import { getApiErrorMessage } from "@/lib/api-error";
 
-type Props = { permissions: string[] };
+const LIST_FILTERS = { estado: "", vista: "activos" };
+
+type Props = { permissions: readonly string[] };
 
 export function EstudiantesPageClient({ permissions }: Props) {
+  const canCreate = can(permissions, "estudiantes.crear");
+  const canEdit = can(permissions, "estudiantes.editar");
+  const canArchive = can(permissions, "estudiantes.eliminar");
+  const canRestore = can(permissions, "estudiantes.restaurar");
+
   const queryClient = useQueryClient();
-  const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 10 });
-  const [search, setSearch] = useState("");
-  const [estado, setEstado] = useState<EstadoEstudiante | "">("");
-  const [eliminados, setEliminados] = useState(false);
+  const list = useUrlListState({ filters: LIST_FILTERS });
+  const eliminados = list.filters.vista === "eliminados";
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Estudiante>();
   const [toArchive, setToArchive] = useState<Estudiante>();
-  const deferredSearch = useDeferredValue(search.trim());
 
   const estudiantesQuery = useQuery({
-    queryKey: [
-      "estudiantes",
-      pagination.pageIndex,
-      pagination.pageSize,
-      deferredSearch,
-      estado,
-      eliminados,
-    ],
+    queryKey: ["estudiantes", list.params, list.filters],
     queryFn: () =>
       getAll({
-        page: pagination.pageIndex + 1,
-        limit: pagination.pageSize,
-        search: deferredSearch || undefined,
-        estado: estado || undefined,
+        ...list.params,
+        estado: (list.filters.estado || undefined) as EstadoEstudiante | undefined,
         eliminados,
       }),
     placeholderData: keepPreviousData,
   });
+
   const archiveMutation = useMutation({
     mutationFn: archive,
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["estudiantes"] });
+      notify.success("Estudiante desactivado.");
       setToArchive(undefined);
     },
   });
@@ -60,55 +63,74 @@ export function EstudiantesPageClient({ permissions }: Props) {
     mutationFn: restore,
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["estudiantes"] });
+      notify.success("Estudiante restaurado.");
     },
   });
 
-  function resetPage() {
-    setPagination((current) => ({ ...current, pageIndex: 0 }));
-  }
-
-  function openCreate() {
-    setEditing(undefined);
-    setFormOpen(true);
-  }
-
-  function openEdit(estudiante: Estudiante) {
-    setEditing(estudiante);
-    setFormOpen(true);
-  }
-
-  const data = estudiantesQuery.data?.data ?? [];
-  const total = estudiantesQuery.data?.meta.total ?? 0;
-  const pageCount = estudiantesQuery.data?.meta.totalPages ?? 0;
-  const error = estudiantesQuery.error ?? archiveMutation.error ?? restoreMutation.error;
+  const columns = useMemo(
+    () =>
+      estudianteColumns({
+        eliminados,
+        onEdit: canEdit
+          ? (estudiante) => {
+              setEditing(estudiante);
+              setFormOpen(true);
+            }
+          : undefined,
+        onArchive: canArchive ? setToArchive : undefined,
+        onRestore: canRestore
+          ? (estudiante) => restoreMutation.mutate(estudiante.id)
+          : undefined,
+        restoringId: restoreMutation.isPending ? restoreMutation.variables : undefined,
+      }),
+    [
+      canArchive,
+      canEdit,
+      canRestore,
+      eliminados,
+      restoreMutation,
+    ],
+  );
 
   return (
     <section className="space-y-6">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#176B9A]">
-            Gestión académica
-          </p>
-          <h1 className="mt-1 text-2xl font-bold tracking-tight text-[#172B3A] sm:text-3xl">
-            Estudiantes
-          </h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-[#64748B]">
-            Consulta y administra los registros de estudiantes.
-          </p>
-        </div>
-        {!eliminados && permissions.includes("estudiantes.crear") && (
-          <Button type="button" className="admin-btn-primary" onClick={openCreate}>
-            <Plus aria-hidden="true" /> Nuevo estudiante
-          </Button>
-        )}
-      </header>
+      <PageHeader
+        eyebrow="Gestión académica"
+        title="Estudiantes"
+        description="Consulta y administra los registros de estudiantes."
+        actions={
+          !eliminados &&
+          canCreate && (
+            <Button
+              type="button"
+              className="admin-btn-primary"
+              onClick={() => {
+                setEditing(undefined);
+                setFormOpen(true);
+              }}
+            >
+              <Plus aria-hidden="true" /> Nuevo estudiante
+            </Button>
+          )
+        }
+      />
 
-      <div className="rounded-2xl border border-[#E2E8F0] bg-white p-4 shadow-[0_2px_10px_rgba(10,37,64,0.04)]">
+      <div className="rounded-2xl border border-horus-line bg-white p-4 shadow-[0_2px_10px_rgba(10,37,64,0.04)]">
         <div className="mb-4 flex flex-wrap items-center gap-2">
-          <Button type="button" aria-pressed={!eliminados} variant={eliminados ? "outline" : "default"} onClick={() => { setEliminados(false); resetPage(); }}>
+          <Button
+            type="button"
+            aria-pressed={!eliminados}
+            variant={eliminados ? "outline" : "default"}
+            onClick={() => list.setFilter("vista", "activos")}
+          >
             Activos y vigentes
           </Button>
-          <Button type="button" aria-pressed={eliminados} variant={eliminados ? "default" : "outline"} onClick={() => { setEliminados(true); resetPage(); }}>
+          <Button
+            type="button"
+            aria-pressed={eliminados}
+            variant={eliminados ? "default" : "outline"}
+            onClick={() => list.setFilter("vista", "eliminados")}
+          >
             Eliminados
           </Button>
         </div>
@@ -116,54 +138,62 @@ export function EstudiantesPageClient({ permissions }: Props) {
           <SearchInput
             aria-label="Buscar estudiantes por DNI, nombre o apellido"
             placeholder="Buscar por DNI, nombre o apellido"
-            value={search}
-            onChange={(event) => { setSearch(event.currentTarget.value); resetPage(); }}
+            value={list.searchInput}
+            onChange={(event) => list.setSearch(event.currentTarget.value)}
           />
           <label>
             <span className="sr-only">Filtrar por estado</span>
-            <select className="admin-select" value={estado} onChange={(event) => { setEstado(event.currentTarget.value as EstadoEstudiante | ""); resetPage(); }}>
+            <select
+              className="admin-select"
+              value={list.filters.estado}
+              onChange={(event) => list.setFilter("estado", event.currentTarget.value)}
+            >
               <option value="">Todos los estados</option>
               <option value="activo">Activo</option>
               <option value="inactivo">Inactivo</option>
             </select>
           </label>
         </div>
-        {estudiantesQuery.isFetching && (
-          <p className="mt-3 text-xs text-[#64748B]" role="status">Actualizando resultados…</p>
+        {estudiantesQuery.isFetching && !estudiantesQuery.isPending && (
+          <p className="mt-3 text-xs text-horus-muted" role="status">
+            Actualizando resultados…
+          </p>
         )}
       </div>
 
-      {error && (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">
-          {getApiErrorMessage(error, "No fue posible cargar los estudiantes.")}
-          {estudiantesQuery.error && (
-            <button type="button" className="ml-2 font-semibold underline" onClick={() => void estudiantesQuery.refetch()}>
-              Reintentar
-            </button>
+      {estudiantesQuery.error && (
+        <ErrorBanner
+          message={getApiErrorMessage(
+            estudiantesQuery.error,
+            "No fue posible cargar los estudiantes.",
           )}
-        </div>
-      )}
-
-      {estudiantesQuery.isPending ? (
-        <div className="rounded-2xl border border-[#E2E8F0] bg-white px-4 py-12 text-center text-sm text-[#64748B]">
-          Cargando estudiantes…
-        </div>
-      ) : (
-        <EstudianteTable
-          data={data}
-          total={total}
-          pageCount={pageCount}
-          pagination={pagination}
-          eliminados={eliminados}
-          canEdit={permissions.includes("estudiantes.editar")}
-          canArchive={permissions.includes("estudiantes.eliminar")}
-          canRestore={permissions.includes("estudiantes.restaurar")}
-          onPaginationChange={setPagination}
-          onEdit={openEdit}
-          onArchive={setToArchive}
-          onRestore={(estudiante) => restoreMutation.mutate(estudiante.id)}
+          onRetry={() => void estudiantesQuery.refetch()}
         />
       )}
+      {(archiveMutation.error || restoreMutation.error) && (
+        <ErrorBanner
+          message={getApiErrorMessage(
+            archiveMutation.error ?? restoreMutation.error,
+            "No se pudo completar la acción.",
+          )}
+        />
+      )}
+
+      <DataTable
+        columns={columns}
+        data={estudiantesQuery.data?.data ?? []}
+        caption={eliminados ? "Estudiantes eliminados" : "Estudiantes"}
+        total={estudiantesQuery.data?.meta.total ?? 0}
+        pageCount={estudiantesQuery.data?.meta.totalPages ?? 0}
+        pagination={list.pagination}
+        onPaginationChange={list.setPagination}
+        sorting={list.sorting}
+        onSortingChange={list.setSorting}
+        isLoading={estudiantesQuery.isPending}
+        emptyMessage="No se encontraron estudiantes."
+        itemLabel={{ singular: "estudiante", plural: "estudiantes" }}
+        getRowId={(estudiante) => estudiante.id}
+      />
 
       <EstudianteForm
         open={formOpen}
@@ -175,10 +205,14 @@ export function EstudiantesPageClient({ permissions }: Props) {
       />
       <EstudianteArchiveConfirm
         open={Boolean(toArchive)}
-        onOpenChange={(open) => { if (!open) setToArchive(undefined); }}
+        onOpenChange={(open) => {
+          if (!open) setToArchive(undefined);
+        }}
         studentName={toArchive ? `${toArchive.nombres} ${toArchive.apellidos}` : undefined}
         pending={archiveMutation.isPending}
-        onConfirm={() => { if (toArchive) archiveMutation.mutate(toArchive.id); }}
+        onConfirm={() => {
+          if (toArchive) archiveMutation.mutate(toArchive.id);
+        }}
       />
     </section>
   );
