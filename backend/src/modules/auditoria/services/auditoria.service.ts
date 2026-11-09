@@ -1,6 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
+import {
+  pageMeta,
+  resolveOrderBy,
+} from '../../../common/pagination/pagination';
 import { ListAuditLogsDto } from '../dtos/list-audit-logs.dto';
 
 @Injectable()
@@ -30,7 +34,16 @@ export class AuditoriaService {
           created_at: true,
           users: { select: { name: true } },
         },
-        orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
+        orderBy: resolveOrderBy<Prisma.audit_logsOrderByWithRelationInput>(
+          query.sort,
+          query.order,
+          {
+            created_at: (d) => [{ created_at: d }],
+            action: (d) => [{ action: d }],
+          },
+          [{ created_at: 'desc' }, { id: 'desc' }],
+          [{ id: 'desc' }],
+        ),
         skip: (page - 1) * limit,
         take: limit,
       }),
@@ -45,12 +58,7 @@ export class AuditoriaService {
         created_at: row.created_at.toISOString(),
         actor: row.users?.name ?? 'Sistema',
       })),
-      meta: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-      },
+      meta: pageMeta(page, limit, total),
     };
   }
 }

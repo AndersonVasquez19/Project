@@ -1,11 +1,22 @@
 import { Transform } from 'class-transformer';
-import { IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
+import { LargePageQueryDto } from '../../../common/pagination/page-query';
 
 function trimToUndefined({ value }: { value: unknown }): unknown {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
-export class ListReclamacionesDto {
+export const RECLAMACIONES_SORT_FIELDS = [
+  'fecha_limite',
+  'recibida_at',
+  'estado',
+] as const;
+
+export class ListReclamacionesDto extends LargePageQueryDto {
+  @IsOptional()
+  @IsIn(RECLAMACIONES_SORT_FIELDS)
+  sort?: (typeof RECLAMACIONES_SORT_FIELDS)[number];
+
   @IsOptional()
   @Transform(trimToUndefined)
   @IsString()

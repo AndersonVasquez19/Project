@@ -7,6 +7,11 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
+import {
+  pageMeta,
+  pagingDefaults,
+  resolveOrderBy,
+} from '../../../common/pagination/pagination';
 import { CreateCotizacionDto } from '../dtos/create-cotizacion.dto';
 import { ListCotizacionesDto } from '../dtos/list-cotizaciones.dto';
 import { UpdateCotizacionDto } from '../dtos/update-cotizacion.dto';
@@ -84,6 +89,7 @@ export class CotizacionesService {
   constructor(private readonly prisma: PrismaService) {}
 
   async findAll(query: ListCotizacionesDto) {
+    const { page, limit, skip } = pagingDefaults(query, 200);
     const search = query.search?.trim();
     const where: Prisma.solicitudes_cotizacionWhereInput = {
       ...(query.estado ? { estado: query.estado } : {}),
@@ -102,15 +108,28 @@ export class CotizacionesService {
       this.prisma.solicitudes_cotizacion.findMany({
         where,
         include: COTIZACION_INCLUDE,
-        orderBy: [{ recibida_at: 'desc' }, { id: 'desc' }],
-        take: 200,
+        orderBy:
+          resolveOrderBy<Prisma.solicitudes_cotizacionOrderByWithRelationInput>(
+            query.sort,
+            query.order,
+            {
+              recibida_at: (d) => [{ recibida_at: d }],
+              estado: (d) => [{ estado: d }],
+              codigo: (d) => [{ codigo: d }],
+            },
+            [{ recibida_at: 'desc' }, { id: 'desc' }],
+            [{ id: 'desc' }],
+          ),
+        skip,
+        take: limit,
       }),
       this.prisma.solicitudes_cotizacion.count({ where }),
     ]);
     return {
       data: rows.map(toResponse),
       total,
-      limite: 200,
+      limite: limit,
+      meta: pageMeta(page, limit, total),
     };
   }
 

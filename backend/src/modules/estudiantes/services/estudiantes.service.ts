@@ -6,6 +6,10 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
+import {
+  pageMeta,
+  resolveOrderBy,
+} from '../../../common/pagination/pagination';
 import { CreateEstudianteDto } from '../dtos/create-estudiante.dto';
 import { ListEstudiantesDto } from '../dtos/list-estudiantes.dto';
 import { UpdateEstudianteDto } from '../dtos/update-estudiante.dto';
@@ -84,7 +88,18 @@ export class EstudiantesService {
     const [rows, total] = await Promise.all([
       this.prisma.estudiantes.findMany({
         where,
-        orderBy: [{ apellidos: 'asc' }, { nombres: 'asc' }],
+        orderBy: resolveOrderBy<Prisma.estudiantesOrderByWithRelationInput>(
+          query.sort,
+          query.order,
+          {
+            apellidos: (d) => [{ apellidos: d }, { nombres: d }],
+            nombres: (d) => [{ nombres: d }, { apellidos: d }],
+            dni: (d) => [{ dni: d }],
+            created_at: (d) => [{ created_at: d }],
+          },
+          [{ apellidos: 'asc' }, { nombres: 'asc' }],
+          [{ id: 'asc' }],
+        ),
         skip: (page - 1) * limit,
         take: limit,
       }),
@@ -93,12 +108,7 @@ export class EstudiantesService {
 
     return {
       data: rows.map((row) => toResponse(row)),
-      meta: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-      },
+      meta: pageMeta(page, limit, total),
     };
   }
 

@@ -7,6 +7,10 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
+import {
+  pageMeta,
+  resolveOrderBy,
+} from '../../../common/pagination/pagination';
 import { CreateCursoDto } from '../dtos/create-curso.dto';
 import { ListCursosDto } from '../dtos/list-cursos.dto';
 import { UpdateCursoDto } from '../dtos/update-curso.dto';
@@ -75,7 +79,18 @@ export class CursosService {
     const [rows, total] = await Promise.all([
       this.prisma.cursos.findMany({
         where,
-        orderBy: { nombre: 'asc' },
+        orderBy: resolveOrderBy<Prisma.cursosOrderByWithRelationInput>(
+          query.sort,
+          query.order,
+          {
+            nombre: (d) => [{ nombre: d }],
+            codigo: (d) => [{ codigo: d }],
+            precio: (d) => [{ precio: d }],
+            created_at: (d) => [{ created_at: d }],
+          },
+          [{ nombre: 'asc' }],
+          [{ id: 'asc' }],
+        ),
         skip: (page - 1) * limit,
         take: limit,
       }),
@@ -84,12 +99,7 @@ export class CursosService {
 
     return {
       data: rows.map((row) => toResponse(row)),
-      meta: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-      },
+      meta: pageMeta(page, limit, total),
     };
   }
 

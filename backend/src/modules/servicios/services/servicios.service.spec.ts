@@ -66,7 +66,7 @@ describe('ServiciosService', () => {
       expect.objectContaining({
         skip: 10,
         take: 10,
-        orderBy: { id: 'asc' },
+        orderBy: [{ id: 'asc' }],
         where: {
           OR: [
             { codigo: { contains: 'web' } },
@@ -74,6 +74,19 @@ describe('ServiciosService', () => {
             { categoria: { contains: 'web' } },
           ],
         },
+      }),
+    );
+  });
+
+  it('sorts by a whitelisted column with a stable tiebreaker', async () => {
+    prisma.servicios_tecnologicos.findMany.mockResolvedValue([row]);
+    prisma.servicios_tecnologicos.count.mockResolvedValue(1);
+
+    await service.findAll({ sort: 'nombre', order: 'desc' });
+
+    expect(prisma.servicios_tecnologicos.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orderBy: [{ nombre: 'desc' }, { id: 'asc' }],
       }),
     );
   });

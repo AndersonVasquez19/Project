@@ -5,6 +5,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -15,6 +16,7 @@ import { PermissionsGuard } from '../../../common/guards/permissions.guard';
 import type { JwtClaims } from '../../auth/services/auth.service';
 import { CreateAprobacionDto } from '../dtos/create-aprobacion.dto';
 import { DecisionAprobacionDto } from '../dtos/decision-aprobacion.dto';
+import { ListAprobacionesDto } from '../dtos/list-aprobaciones.dto';
 import { AprobacionesService } from '../services/aprobaciones.service';
 
 type AuthenticatedRequest = Request & { auth: JwtClaims };
@@ -26,8 +28,8 @@ export class AprobacionesController {
 
   @Get()
   @RequirePermissions('aprobaciones.ver')
-  findAll() {
-    return this.aprobaciones.findAll();
+  findAll(@Query() query: ListAprobacionesDto) {
+    return this.aprobaciones.findAll(query);
   }
 
   @Post()

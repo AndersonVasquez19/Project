@@ -9,6 +9,7 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
+import { OrderQueryDto } from '../../../common/pagination/pagination';
 
 export const CATEGORIAS_CURSO = [
   'tecnologia',
@@ -20,7 +21,18 @@ export const CATEGORIAS_CURSO = [
 
 export const ESTADOS_CURSO = ['activo', 'inactivo', 'archivado'] as const;
 
-export class ListCursosDto {
+export const CURSOS_SORT_FIELDS = [
+  'nombre',
+  'codigo',
+  'precio',
+  'created_at',
+] as const;
+
+export class ListCursosDto extends OrderQueryDto {
+  @IsOptional()
+  @IsIn(CURSOS_SORT_FIELDS)
+  sort?: (typeof CURSOS_SORT_FIELDS)[number];
+
   @IsOptional()
   @Type(() => Number)
   @IsInt()

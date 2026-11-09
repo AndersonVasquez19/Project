@@ -10,6 +10,7 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
+import { OrderQueryDto } from '../../../common/pagination/pagination';
 
 export const ESTADOS_MATRICULA = ['pendiente', 'pagada', 'anulada'] as const;
 
@@ -26,7 +27,17 @@ function parseBoolean({ value }: { value: unknown }): unknown {
   return value;
 }
 
-export class ListMatriculasDto {
+export const MATRICULAS_SORT_FIELDS = [
+  'fecha_matricula',
+  'estado',
+  'created_at',
+] as const;
+
+export class ListMatriculasDto extends OrderQueryDto {
+  @IsOptional()
+  @IsIn(MATRICULAS_SORT_FIELDS)
+  sort?: (typeof MATRICULAS_SORT_FIELDS)[number];
+
   @IsOptional()
   @Type(() => Number)
   @IsInt()

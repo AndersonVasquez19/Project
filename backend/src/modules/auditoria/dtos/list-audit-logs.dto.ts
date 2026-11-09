@@ -1,5 +1,6 @@
 import { Type } from 'class-transformer';
 import {
+  IsIn,
   IsInt,
   IsOptional,
   IsString,
@@ -7,8 +8,15 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
+import { OrderQueryDto } from '../../../common/pagination/pagination';
 
-export class ListAuditLogsDto {
+export const AUDITLOGS_SORT_FIELDS = ['created_at', 'action'] as const;
+
+export class ListAuditLogsDto extends OrderQueryDto {
+  @IsOptional()
+  @IsIn(AUDITLOGS_SORT_FIELDS)
+  sort?: (typeof AUDITLOGS_SORT_FIELDS)[number];
+
   @IsOptional()
   @Type(() => Number)
   @IsInt()

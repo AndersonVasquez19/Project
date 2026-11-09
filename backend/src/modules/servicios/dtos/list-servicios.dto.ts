@@ -1,5 +1,6 @@
 import { Type } from 'class-transformer';
 import {
+  IsIn,
   IsInt,
   IsOptional,
   IsString,
@@ -7,8 +8,21 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
+import { OrderQueryDto } from '../../../common/pagination/pagination';
 
-export class ListServiciosDto {
+export const SERVICIOS_SORT_FIELDS = [
+  'nombre',
+  'codigo',
+  'categoria',
+  'estado',
+  'created_at',
+] as const;
+
+export class ListServiciosDto extends OrderQueryDto {
+  @IsOptional()
+  @IsIn(SERVICIOS_SORT_FIELDS)
+  sort?: (typeof SERVICIOS_SORT_FIELDS)[number];
+
   @IsOptional()
   @Type(() => Number)
   @IsInt()

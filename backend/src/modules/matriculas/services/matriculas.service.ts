@@ -8,6 +8,10 @@ import {
 import { Prisma } from '@prisma/client';
 import { writeAudit } from '../../../common/audit/write-audit';
 import { PrismaService } from '../../../prisma/prisma.service';
+import {
+  pageMeta,
+  resolveOrderBy,
+} from '../../../common/pagination/pagination';
 import { CreateMatriculaDto } from '../dtos/create-matricula.dto';
 import { ListMatriculasDto } from '../dtos/list-matriculas.dto';
 import { UpdateMatriculaDto } from '../dtos/update-matricula.dto';
@@ -141,7 +145,17 @@ export class MatriculasService {
       this.prisma.matriculas.findMany({
         where,
         include: RESPONSE_INCLUDE,
-        orderBy: [{ fecha_matricula: 'desc' }, { id: 'desc' }],
+        orderBy: resolveOrderBy<Prisma.matriculasOrderByWithRelationInput>(
+          query.sort,
+          query.order,
+          {
+            fecha_matricula: (d) => [{ fecha_matricula: d }],
+            estado: (d) => [{ estado: d }],
+            created_at: (d) => [{ created_at: d }],
+          },
+          [{ fecha_matricula: 'desc' }, { id: 'desc' }],
+          [{ id: 'desc' }],
+        ),
         skip: (page - 1) * limit,
         take: limit,
       }),
@@ -150,12 +164,7 @@ export class MatriculasService {
 
     return {
       data: rows.map((row) => toResponse(row)),
-      meta: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-      },
+      meta: pageMeta(page, limit, total),
     };
   }
 

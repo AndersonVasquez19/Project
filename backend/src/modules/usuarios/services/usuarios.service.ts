@@ -10,6 +10,10 @@ import { Prisma } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { writeAudit } from '../../../common/audit/write-audit';
 import { PrismaService } from '../../../prisma/prisma.service';
+import {
+  pageMeta,
+  resolveOrderBy,
+} from '../../../common/pagination/pagination';
 import { CreateUsuarioDto } from '../dtos/create-usuario.dto';
 import { ListUsuariosDto } from '../dtos/list-usuarios.dto';
 import { UpdateUsuarioDto } from '../dtos/update-usuario.dto';
@@ -68,7 +72,16 @@ export class UsuariosService {
       this.prisma.user.findMany({
         where,
         select: { id: true, name: true, email: true },
-        orderBy: { name: 'asc' },
+        orderBy: resolveOrderBy<Prisma.UserOrderByWithRelationInput>(
+          query.sort,
+          query.order,
+          {
+            name: (d) => [{ name: d }],
+            email: (d) => [{ email: d }],
+          },
+          [{ name: 'asc' }],
+          [{ id: 'asc' }],
+        ),
         skip: (page - 1) * limit,
         take: limit,
       }),
@@ -134,12 +147,7 @@ export class UsuariosService {
         }),
       ),
       assignableRoles,
-      meta: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-      },
+      meta: pageMeta(page, limit, total),
     };
   }
 

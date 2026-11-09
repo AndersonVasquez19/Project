@@ -5,6 +5,11 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
+import {
+  pageMeta,
+  pagingDefaults,
+  resolveOrderBy,
+} from '../../../common/pagination/pagination';
 import { AddReclamacionNoteDto } from '../dtos/add-reclamacion-note.dto';
 import { ListReclamacionesDto } from '../dtos/list-reclamaciones.dto';
 
@@ -26,6 +31,7 @@ export class ReclamacionesService {
   constructor(private readonly prisma: PrismaService) {}
 
   async findAll(query: ListReclamacionesDto) {
+    const { page, limit, skip } = pagingDefaults(query, 200);
     const search = query.search?.trim();
     const where: Prisma.reclamacionesWhereInput = {
       ...(query.estado ? { estado: query.estado } : {}),
@@ -58,8 +64,19 @@ export class ReclamacionesService {
             take: 10,
           },
         },
-        orderBy: [{ fecha_limite: 'asc' }, { id: 'desc' }],
-        take: 200,
+        orderBy: resolveOrderBy<Prisma.reclamacionesOrderByWithRelationInput>(
+          query.sort,
+          query.order,
+          {
+            fecha_limite: (d) => [{ fecha_limite: d }],
+            recibida_at: (d) => [{ recibida_at: d }],
+            estado: (d) => [{ estado: d }],
+          },
+          [{ fecha_limite: 'asc' }, { id: 'desc' }],
+          [{ id: 'desc' }],
+        ),
+        skip,
+        take: limit,
       }),
       this.prisma.reclamaciones.count({ where }),
     ]);
@@ -98,7 +115,8 @@ export class ReclamacionesService {
         })),
       })),
       total,
-      limite: 200,
+      limite: limit,
+      meta: pageMeta(page, limit, total),
     };
   }
 

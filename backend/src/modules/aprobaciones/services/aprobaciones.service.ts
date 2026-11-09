@@ -5,9 +5,16 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
+import {
+  pageMeta,
+  pagingDefaults,
+  resolveOrderBy,
+} from '../../../common/pagination/pagination';
 import { CreateAprobacionDto } from '../dtos/create-aprobacion.dto';
 import { DecisionAprobacionDto } from '../dtos/decision-aprobacion.dto';
+import { ListAprobacionesDto } from '../dtos/list-aprobaciones.dto';
 
 function parseId(value: string): bigint {
   if (!/^[1-9]\d*$/.test(value)) {
@@ -22,19 +29,38 @@ function parseId(value: string): bigint {
 export class AprobacionesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll() {
-    const rows = await this.prisma.aprobaciones_internas.findMany({
-      include: {
-        users_aprobaciones_internas_solicitante_idTousers: {
-          select: { id: true, name: true },
+  async findAll(query: ListAprobacionesDto = {}) {
+    const { page, limit, skip } = pagingDefaults(query, 200);
+    const where: Prisma.aprobaciones_internasWhereInput = query.estado
+      ? { estado: query.estado }
+      : {};
+    const [rows, total] = await Promise.all([
+      this.prisma.aprobaciones_internas.findMany({
+        where,
+        include: {
+          users_aprobaciones_internas_solicitante_idTousers: {
+            select: { id: true, name: true },
+          },
+          users_aprobaciones_internas_aprobador_idTousers: {
+            select: { id: true, name: true },
+          },
         },
-        users_aprobaciones_internas_aprobador_idTousers: {
-          select: { id: true, name: true },
-        },
-      },
-      orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
-      take: 200,
-    });
+        orderBy:
+          resolveOrderBy<Prisma.aprobaciones_internasOrderByWithRelationInput>(
+            query.sort,
+            query.order,
+            {
+              created_at: (d) => [{ created_at: d }],
+              estado: (d) => [{ estado: d }],
+            },
+            [{ created_at: 'desc' }, { id: 'desc' }],
+            [{ id: 'desc' }],
+          ),
+        skip,
+        take: limit,
+      }),
+      this.prisma.aprobaciones_internas.count({ where }),
+    ]);
     return {
       data: rows.map((row) => ({
         id: row.id.toString(),
@@ -60,7 +86,9 @@ export class AprobacionesService {
             }
           : null,
       })),
-      limite: 200,
+      total,
+      limite: limit,
+      meta: pageMeta(page, limit, total),
     };
   }
 

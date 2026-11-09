@@ -9,6 +9,7 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
+import { OrderQueryDto } from '../../../common/pagination/pagination';
 
 export const ESTADOS_ESTUDIANTE = ['activo', 'inactivo'] as const;
 
@@ -25,7 +26,18 @@ function parseBoolean({ value }: { value: unknown }): unknown {
   return value;
 }
 
-export class ListEstudiantesDto {
+export const ESTUDIANTES_SORT_FIELDS = [
+  'apellidos',
+  'nombres',
+  'dni',
+  'created_at',
+] as const;
+
+export class ListEstudiantesDto extends OrderQueryDto {
+  @IsOptional()
+  @IsIn(ESTUDIANTES_SORT_FIELDS)
+  sort?: (typeof ESTUDIANTES_SORT_FIELDS)[number];
+
   @IsOptional()
   @Type(() => Number)
   @IsInt()

@@ -5,7 +5,12 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
+import {
+  pageMeta,
+  resolveOrderBy,
+} from '../../../common/pagination/pagination';
 import { CreateServicioDto } from '../dtos/create-servicio.dto';
 import { ListServiciosDto } from '../dtos/list-servicios.dto';
 import { UpdateServicioDto } from '../dtos/update-servicio.dto';
@@ -57,7 +62,20 @@ export class ServiciosService {
     const [rows, total] = await Promise.all([
       this.prisma.servicios_tecnologicos.findMany({
         where,
-        orderBy: { id: 'asc' },
+        orderBy:
+          resolveOrderBy<Prisma.servicios_tecnologicosOrderByWithRelationInput>(
+            query.sort,
+            query.order,
+            {
+              nombre: (d) => [{ nombre: d }],
+              codigo: (d) => [{ codigo: d }],
+              categoria: (d) => [{ categoria: d }],
+              estado: (d) => [{ estado: d }],
+              created_at: (d) => [{ created_at: d }],
+            },
+            [{ id: 'asc' }],
+            [{ id: 'asc' }],
+          ),
         skip: (page - 1) * limit,
         take: limit,
       }),
@@ -66,12 +84,7 @@ export class ServiciosService {
 
     return {
       data: rows.map((row) => toResponse(row)),
-      meta: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-      },
+      meta: pageMeta(page, limit, total),
     };
   }
 
