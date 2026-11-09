@@ -1,7 +1,6 @@
 import { Transform, TransformFnParams, Type } from 'class-transformer';
 import {
   ArrayMaxSize,
-  IsIn,
   IsOptional,
   IsString,
   Matches,
@@ -9,20 +8,10 @@ import {
   MinLength,
   ValidateNested,
 } from 'class-validator';
+import { ChatHistoryItemDto } from './chat-history-item.dto';
 
 function trimString({ value }: TransformFnParams): unknown {
   return typeof value === 'string' ? value.trim() : value;
-}
-
-class ChatHistoryItemDto {
-  @IsIn(['user', 'assistant'])
-  role!: 'user' | 'assistant';
-
-  @IsString()
-  @Transform(trimString)
-  @MinLength(1)
-  @MaxLength(2000)
-  content!: string;
 }
 
 export class ChatAdvisorDto {
