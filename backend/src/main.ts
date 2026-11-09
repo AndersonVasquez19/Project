@@ -3,6 +3,7 @@ import type { NestExpressApplication } from '@nestjs/platform-express';
 import { UnprocessableEntityException, ValidationPipe } from '@nestjs/common';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
+import { ApiExceptionFilter } from './common/filters/api-exception.filter';
 
 function parsePort(value: string | undefined): number {
   const port = Number(value ?? 4000);
@@ -31,6 +32,7 @@ async function bootstrap(): Promise<void> {
     allowedHeaders: ['Accept', 'Authorization', 'Content-Type'],
   });
   app.setGlobalPrefix('api');
+  app.useGlobalFilters(new ApiExceptionFilter());
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
