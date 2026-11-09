@@ -1,3 +1,9 @@
+import { parseResponse } from "@/lib/api/contract";
+import {
+  usuarioActualizadoSchema,
+  usuarioSchema,
+  usuariosPageSchema,
+} from "@/lib/api/usuario";
 import { apiClient } from "@/services/apiClient";
 import type {
   Usuario,
@@ -7,6 +13,7 @@ import type {
 } from "@/types/usuario";
 
 const resource = "/usuarios";
+const label = "usuarios";
 
 export interface UsuarioCreateInput {
   name: string;
@@ -16,24 +23,22 @@ export interface UsuarioCreateInput {
 }
 
 export async function createUser(input: UsuarioCreateInput): Promise<Usuario> {
-  const { data } = await apiClient.post<Usuario>(resource, input);
-  return data;
+  const { data } = await apiClient.post<unknown>(resource, input);
+  return parseResponse(usuarioSchema, data, label);
 }
 
 export async function getAll(query: UsuariosQuery): Promise<UsuariosPage> {
-  const { data } = await apiClient.get<UsuariosPage>(resource, {
-    params: query,
-  });
-  return data;
+  const { data } = await apiClient.get<unknown>(resource, { params: query });
+  return parseResponse(usuariosPageSchema, data, label);
 }
 
 export async function updateRoles(
   id: string,
   roles: string[],
 ): Promise<UsuarioUpdateResult> {
-  const { data } = await apiClient.put<UsuarioUpdateResult>(
+  const { data } = await apiClient.put<unknown>(
     `${resource}/${encodeURIComponent(id)}`,
     { roles },
   );
-  return data;
+  return parseResponse(usuarioActualizadoSchema, data, label);
 }

@@ -13,6 +13,8 @@ export interface UsuariosQuery {
   page: number;
   limit: number;
   search?: string;
+  sort?: string;
+  order?: "asc" | "desc";
 }
 
 export interface UsuariosPage {

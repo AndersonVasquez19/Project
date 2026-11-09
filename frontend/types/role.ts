@@ -20,3 +20,11 @@ export interface RoleInput {
   name: string;
   permissionIds: string[];
 }
+
+/** Respuesta de crear/editar un rol (la edición indica si revocó sesiones). */
+export interface RoleSaved {
+  id: string;
+  name: string;
+  permissionIds: string[];
+  sessionRevoked?: boolean;
+}

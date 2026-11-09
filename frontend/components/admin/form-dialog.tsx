@@ -21,6 +21,8 @@ type FormDialogProps = {
   submitLabel: string;
   pendingLabel?: string;
   pending?: boolean;
+  /** Solo lectura: oculta el botón de guardar. */
+  hideSubmit?: boolean;
   /** Error general de la API (los de campo van en cada FormField). */
   error?: string | null;
   className?: string;
@@ -37,6 +39,7 @@ export function FormDialog({
   submitLabel,
   pendingLabel = "Guardando...",
   pending = false,
+  hideSubmit = false,
   error,
   className = "sm:max-w-lg",
   children,
@@ -75,9 +78,11 @@ export function FormDialog({
             >
               Cancelar
             </Button>
-            <Button type="submit" disabled={pending}>
-              {pending ? pendingLabel : submitLabel}
-            </Button>
+            {!hideSubmit && (
+              <Button type="submit" disabled={pending}>
+                {pending ? pendingLabel : submitLabel}
+              </Button>
+            )}
           </DialogFooter>
         </form>
       </DialogContent>
