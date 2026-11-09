@@ -1,3 +1,4 @@
+import { ACCESS_TOKEN_COOKIE } from "@/lib/constants";
 import { NextRequest, NextResponse } from "next/server";
 import {
   apiErrorSchema,
@@ -9,7 +10,6 @@ import {
   rejectCrossOrigin,
 } from "@/lib/server/request-guard";
 
-const ACCESS_TOKEN_COOKIE = "horus_access_token";
 
 export async function POST(request: NextRequest) {
   const crossOrigin = rejectCrossOrigin(request);

@@ -1,12 +1,14 @@
-import { cookies } from "next/headers";
-import { decodeAuthToken } from "@/lib/auth";
+import { AccessDenied } from "@/components/admin/access-denied";
+import { can } from "@/lib/permissions";
+import { getPermissions } from "@/lib/server/identity";
 import { UsuariosPageClient } from "./page-client";
 
 export default async function UsuariosPage() {
-  const token = (await cookies()).get("horus_access_token")?.value;
-  const identity = token ? decodeAuthToken(token) : null;
+  const permissions = await getPermissions();
 
-  return (
-    <UsuariosPageClient permissions={identity?.permissions ?? []} />
-  );
+  if (!can(permissions, "usuarios.ver")) {
+    return <AccessDenied message="No tienes permiso para ver los usuarios." />;
+  }
+
+  return <UsuariosPageClient permissions={permissions} />;
 }

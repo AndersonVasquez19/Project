@@ -1,16 +1,20 @@
-import { cookies } from "next/headers";
-import { decodeAuthToken } from "@/lib/auth";
+import { AccessDenied } from "@/components/admin/access-denied";
+import { can } from "@/lib/permissions";
+import { getIdentity } from "@/lib/server/identity";
 import { RolesPageClient } from "./page-client";
 
 export default async function RolesPage() {
-  const token = (await cookies()).get("horus_access_token")?.value;
-  const identity = token ? decodeAuthToken(token) : null;
+  const identity = await getIdentity();
+  const permissions = identity?.permissions ?? [];
+
+  if (!can(permissions, "roles.ver")) {
+    return <AccessDenied message="No tienes permiso para ver los roles." />;
+  }
 
   return (
     <RolesPageClient
       canManage={Boolean(
-        identity?.roles.includes("admin") &&
-          identity.permissions.includes("roles.editar"),
+        identity?.roles.includes("admin") && can(permissions, "roles.editar"),
       )}
     />
   );

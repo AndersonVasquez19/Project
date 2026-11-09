@@ -1,4 +1,5 @@
 import "server-only";
+import { getApiOrigin } from "@/lib/env";
 
 export type SessionStatus = "valid" | "invalid" | "unavailable";
 
@@ -7,7 +8,7 @@ export type SessionStatus = "valid" | "invalid" | "unavailable";
  * no conoce el secreto JWT: `decodeJwt` solo lee las claims, no las valida.
  */
 export async function verifySession(token: string): Promise<SessionStatus> {
-  const apiOrigin = process.env.AUTH_API_URL;
+  const apiOrigin = getApiOrigin();
   if (!apiOrigin) {
     return "unavailable";
   }

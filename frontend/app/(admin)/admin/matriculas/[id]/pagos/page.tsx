@@ -1,5 +1,6 @@
-import { cookies } from "next/headers";
-import { decodeAuthToken } from "@/lib/auth";
+import { AccessDenied } from "@/components/admin/access-denied";
+import { can } from "@/lib/permissions";
+import { getPermissions } from "@/lib/server/identity";
 import { MatriculaPagosPageClient } from "./page-client";
 
 export default async function MatriculaPagosPage({
@@ -7,16 +8,16 @@ export default async function MatriculaPagosPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const [{ id }, token] = await Promise.all([
-    params,
-    cookies().then((store) => store.get("horus_access_token")?.value),
-  ]);
-  const identity = token ? decodeAuthToken(token) : null;
+  const [{ id }, permissions] = await Promise.all([params, getPermissions()]);
+
+  if (!can(permissions, "matriculas.ver")) {
+    return <AccessDenied message="No tienes permiso para ver los pagos." />;
+  }
 
   return (
     <MatriculaPagosPageClient
       matriculaId={id}
-      canRegister={Boolean(identity?.permissions.includes("matriculas.editar"))}
+      canRegister={can(permissions, "matriculas.editar")}
     />
   );
 }

@@ -1,20 +1,11 @@
 import { Database, ShieldAlert } from "lucide-react";
-import { cookies } from "next/headers";
-import { decodeAuthToken } from "@/lib/auth";
+import { AccessDenied } from "@/components/admin/access-denied";
+import { hasPermission } from "@/lib/server/identity";
 
 export default async function RespaldoPage() {
-  const token = (await cookies()).get("horus_access_token")?.value;
-  const identity = token ? decodeAuthToken(token) : null;
-  const canView = Boolean(identity?.permissions.includes("respaldo.ver"));
-
-  if (!canView) {
+  if (!(await hasPermission("respaldo.ver"))) {
     return (
-      <section className="rounded-2xl border border-[#E2E8F0] bg-white p-8 text-center">
-        <h1 className="text-xl font-bold text-[#172B3A]">Acceso restringido</h1>
-        <p className="mt-2 text-sm text-[#64748B]">
-          No tienes permiso para consultar la configuración de respaldos.
-        </p>
-      </section>
+      <AccessDenied message="No tienes permiso para consultar la configuración de respaldos." />
     );
   }
 

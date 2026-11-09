@@ -1,10 +1,14 @@
-import { cookies } from "next/headers";
-import { decodeAuthToken } from "@/lib/auth";
+import { AccessDenied } from "@/components/admin/access-denied";
+import { can } from "@/lib/permissions";
+import { getPermissions } from "@/lib/server/identity";
 import { CursosPageClient } from "./page-client";
 
 export default async function CursosPage() {
-  const token = (await cookies()).get("horus_access_token")?.value;
-  const identity = token ? decodeAuthToken(token) : null;
+  const permissions = await getPermissions();
 
-  return <CursosPageClient permissions={identity?.permissions ?? []} />;
+  if (!can(permissions, "cursos.ver")) {
+    return <AccessDenied message="No tienes permiso para ver los cursos." />;
+  }
+
+  return <CursosPageClient permissions={permissions} />;
 }

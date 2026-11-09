@@ -1,6 +1,6 @@
+import { ACCESS_TOKEN_COOKIE } from "@/lib/constants";
 import { NextRequest, NextResponse } from "next/server";
 
-const ACCESS_TOKEN_COOKIE = "horus_access_token";
 
 export function proxy(request: NextRequest) {
   if (!request.cookies.has(ACCESS_TOKEN_COOKIE)) {

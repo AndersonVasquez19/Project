@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import axios from "axios";
 import Link from "next/link";
 import { StatCard } from "@/components/admin/stat-card";
+import { can, type Permission } from "@/lib/permissions";
 import { getSummary } from "@/services/dashboardService";
 
 function errorMessage(error: unknown): string {
@@ -26,7 +27,19 @@ function formatDate(value: string): string {
   }).format(date);
 }
 
-export function DashboardPageClient({ userName }: { userName: string }) {
+const SHORTCUTS: ReadonlyArray<readonly [string, string, string, Permission]> = [
+  ["Registrar estudiante", "/admin/estudiantes", "fa-user-plus", "estudiantes.crear"],
+  ["Crear matrícula", "/admin/matriculas", "fa-clipboard-check", "matriculas.crear"],
+  ["Gestionar cursos", "/admin/cursos", "fa-book-open", "cursos.ver"],
+];
+
+export function DashboardPageClient({
+  userName,
+  permissions,
+}: {
+  userName: string;
+  permissions: readonly string[];
+}) {
   const summaryQuery = useQuery({
     queryKey: ["dashboard"],
     queryFn: getSummary,
@@ -132,11 +145,9 @@ export function DashboardPageClient({ userName }: { userName: string }) {
             Accesos directos
           </p>
           <div className="mt-4 grid gap-2">
-            {[
-              ["Registrar estudiante", "/admin/estudiantes", "fa-user-plus"],
-              ["Crear matrícula", "/admin/matriculas", "fa-clipboard-check"],
-              ["Gestionar cursos", "/admin/cursos", "fa-book-open"],
-            ].map(([label, href, icon]) => (
+            {SHORTCUTS.filter(([, , , permission]) =>
+              can(permissions, permission),
+            ).map(([label, href, icon]) => (
               <Link
                 key={href}
                 href={href}
