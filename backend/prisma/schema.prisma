@@ -47,6 +47,8 @@ model aprobaciones_internas {
   updated_at                                        DateTime? @db.Timestamp(0)
   users_aprobaciones_internas_aprobador_idTousers   User?     @relation("aprobaciones_internas_aprobador_idTousers", fields: [aprobador_id], references: [id], onUpdate: NoAction, map: "aprobaciones_internas_aprobador_id_foreign")
   users_aprobaciones_internas_solicitante_idTousers User?     @relation("aprobaciones_internas_solicitante_idTousers", fields: [solicitante_id], references: [id], onUpdate: NoAction, map: "aprobaciones_internas_solicitante_id_foreign")
+
+  @@index([estado, created_at], map: "aprobaciones_estado_created_index")
 }
 
 model audit_logs {
@@ -59,6 +61,11 @@ model audit_logs {
   ip_address String?  @db.VarChar(255)
   created_at DateTime @default(now()) @db.Timestamp(0)
   users      User?    @relation(fields: [user_id], references: [id], onUpdate: NoAction, map: "audit_logs_user_id_foreign")
+
+  @@index([created_at, id], map: "audit_logs_created_at_id_index")
+  @@index([model_type, model_id], map: "audit_logs_model_index")
+  @@index([action], map: "audit_logs_action_index")
+  @@index([user_id, created_at], map: "audit_logs_user_id_created_at_index")
 }
 
 model cache {
@@ -160,6 +167,10 @@ model cursos {
   deleted_at          DateTime?            @db.Timestamp(0)
   curso_publicaciones curso_publicaciones?
   matriculas          matriculas[]
+
+  @@index([deleted_at, nombre], map: "cursos_deleted_at_nombre_index")
+  @@index([estado], map: "cursos_estado_index")
+  @@index([categoria], map: "cursos_categoria_index")
 }
 
 model estudiantes {
@@ -176,6 +187,9 @@ model estudiantes {
   updated_at       DateTime?    @db.Timestamp(0)
   deleted_at       DateTime?    @db.Timestamp(0)
   matriculas       matriculas[]
+
+  @@index([deleted_at, apellidos, nombres], map: "estudiantes_deleted_at_apellidos_index")
+  @@index([estado], map: "estudiantes_estado_index")
 }
 
 model failed_jobs {
@@ -253,19 +267,22 @@ model matriculas {
   estudiantes             estudiantes              @relation(fields: [estudiante_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "matriculas_estudiante_id_foreign")
 
   @@index([estudiante_id, curso_id], map: "matriculas_estudiante_id_curso_id_index")
+  @@index([deleted_at, fecha_matricula, id], map: "matriculas_deleted_at_fecha_index")
+  @@index([curso_id], map: "matriculas_curso_id_index")
+  @@index([estado, fecha_matricula], map: "matriculas_estado_fecha_index")
 }
 
 model matricula_pagos {
-  id                  BigInt    @id @default(autoincrement())
+  id                  BigInt     @id @default(autoincrement())
   matricula_id        BigInt
-  monto               Decimal   @db.Decimal(10, 2)
-  metodo              String    @db.VarChar(30)
-  referencia          String?   @db.VarChar(100)
-  nota                String?   @db.VarChar(500)
-  pagado_at           DateTime  @db.DateTime(0)
+  monto               Decimal    @db.Decimal(10, 2)
+  metodo              String     @db.VarChar(30)
+  referencia          String?    @db.VarChar(100)
+  nota                String?    @db.VarChar(500)
+  pagado_at           DateTime   @db.DateTime(0)
   registrado_por      BigInt?
-  legacy_matricula_id BigInt?   @unique(map: "matricula_pagos_legacy_matricula_unique")
-  created_at          DateTime  @default(now()) @db.Timestamp(0)
+  legacy_matricula_id BigInt?    @unique(map: "matricula_pagos_legacy_matricula_unique")
+  created_at          DateTime   @default(now()) @db.Timestamp(0)
   matriculas          matriculas @relation(fields: [matricula_id], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "matricula_pagos_matricula_id_foreign")
 
   @@index([matricula_id, pagado_at], map: "matricula_pagos_matricula_id_pagado_at_index")
@@ -310,6 +327,8 @@ model notificaciones_internas {
   updated_at DateTime? @db.Timestamp(0)
   audiencia  String    @db.VarChar(20)
   users      User?     @relation(fields: [user_id], references: [id], onUpdate: NoAction, map: "notificaciones_internas_user_id_foreign")
+
+  @@index([user_id, leida, created_at], map: "notificaciones_user_leida_created_index")
 }
 
 model password_reset_tokens {
