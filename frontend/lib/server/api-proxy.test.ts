@@ -70,6 +70,47 @@ describe("proxyToApi", () => {
     expect(init.signal).toBeInstanceOf(AbortSignal);
   });
 
+  it("renueva la sesión en una petición correcta cuando el token ya pasó la mitad de su vida", async () => {
+    const encode = (value: unknown) =>
+      Buffer.from(JSON.stringify(value)).toString("base64url");
+    const now = Math.floor(Date.now() / 1000);
+    session.token = `${encode({ alg: "HS256" })}.${encode({ iat: now - 1_500, exp: now + 300 })}.f`;
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify({ data: [] }), { status: 200 }))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ access_token: "token-renovado", expires_in: 1800 })),
+      );
+
+    const response = await proxyToApi(request(), "/cursos", "cursos");
+
+    expect(response.status).toBe(200);
+    const cookie = response.cookies.get("horus_access_token");
+    expect(cookie?.value).toBe("token-renovado");
+    expect(response.headers.get("set-cookie")).toMatch(/HttpOnly/i);
+    expect(response.headers.get("set-cookie")).toMatch(/Max-Age=1800/);
+  });
+
+  it("no renueva si la API respondió con error ni si el token es reciente", async () => {
+    const encode = (value: unknown) =>
+      Buffer.from(JSON.stringify(value)).toString("base64url");
+    const now = Math.floor(Date.now() / 1000);
+    const build = (iat: number, exp: number) =>
+      `${encode({ alg: "HS256" })}.${encode({ iat, exp })}.f`;
+
+    session.token = build(now - 1_500, now + 300);
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ message: "no" }), { status: 403 }));
+    const denied = await proxyToApi(request(), "/cursos", "cursos");
+    expect(denied.cookies.get("horus_access_token")).toBeUndefined();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    fetchMock.mockClear();
+    session.token = build(now - 60, now + 1_740);
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ data: [] }), { status: 200 }));
+    const fresh = await proxyToApi(request(), "/cursos", "cursos");
+    expect(fresh.cookies.get("horus_access_token")).toBeUndefined();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it("rechaza cuerpos mayores al límite con 413", async () => {
     const response = await proxyToApi(
       request("POST", "x".repeat(MAX_BODY_BYTES + 1)),

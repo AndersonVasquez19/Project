@@ -4,6 +4,8 @@ import { NextResponse } from "next/server";
 import { ACCESS_TOKEN_COOKIE } from "@/lib/constants";
 import { getApiOrigin } from "@/lib/env";
 import { clientIpHeaders, rejectCrossOrigin } from "@/lib/server/request-guard";
+import { setSessionCookie } from "@/lib/server/session-cookie";
+import { renewSessionIfNeeded } from "@/lib/server/session-renewal";
 
 /** Tiempo máximo de espera a la API: evita colgar peticiones de Node. */
 export const UPSTREAM_TIMEOUT_MS = 10_000;
@@ -21,6 +23,7 @@ function jsonError(message: string, status: number): NextResponse {
  * - Rechaza escrituras con Origin distinto (CSRF).
  * - Aplica timeout y límite de cuerpo.
  * - No reenvía cuerpos que no sean JSON.
+ * - Renueva la sesión mientras el usuario está activo (ver session-renewal.ts).
  */
 export async function proxyToApi(
   request: Request,
@@ -93,5 +96,16 @@ export async function proxyToApi(
     );
   }
 
-  return NextResponse.json(responseBody, { status: upstream.status });
+  const response = NextResponse.json(responseBody, { status: upstream.status });
+
+  // Sesión deslizante: una petición correcta del usuario renueva el token si ya
+  // pasó la mitad de su vida. Un fallo al renovar no afecta a la respuesta.
+  if (upstream.ok) {
+    const renewed = await renewSessionIfNeeded(token);
+    if (renewed) {
+      setSessionCookie(response, renewed.accessToken, renewed.expiresIn);
+    }
+  }
+
+  return response;
 }

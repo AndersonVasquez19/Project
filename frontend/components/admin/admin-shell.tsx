@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AdminSidebar } from "@/components/admin/sidebar";
 import { AdminTopbar } from "@/components/admin/topbar";
+import { useSessionKeepAlive } from "@/hooks/use-session-keep-alive";
 import { Toaster } from "@/components/admin/toaster";
 import type { AdminIdentity } from "@/lib/auth";
 import { apiClient } from "@/services/apiClient";
@@ -16,6 +17,7 @@ type AdminShellProps = {
 
 export function AdminShell({ user, children }: AdminShellProps) {
   const router = useRouter();
+  useSessionKeepAlive();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState<string | null>(null);

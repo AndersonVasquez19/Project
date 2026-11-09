@@ -1,4 +1,4 @@
-import { ACCESS_TOKEN_COOKIE } from "@/lib/constants";
+import { setSessionCookie } from "@/lib/server/session-cookie";
 import { NextRequest, NextResponse } from "next/server";
 import {
   apiErrorSchema,
@@ -108,13 +108,11 @@ export async function POST(request: NextRequest) {
   }
 
   const response = NextResponse.json({ user: loginResponse.data.user });
-  response.cookies.set(ACCESS_TOKEN_COOKIE, loginResponse.data.access_token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: loginResponse.data.expires_in,
-  });
+  setSessionCookie(
+    response,
+    loginResponse.data.access_token,
+    loginResponse.data.expires_in,
+  );
 
   return response;
 }
